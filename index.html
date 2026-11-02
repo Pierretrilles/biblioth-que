@@ -238,7 +238,6 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
           <button type="button" data-v="genre">Genre</button>
           <button type="button" data-v="country">Pays</button>
           <button type="button" data-v="author">Auteur</button>
-          <button type="button" data-v="year">Année de lecture</button>
           <button type="button" data-v="publisher">Éditeur</button>
         </div>
       </div>
@@ -255,7 +254,6 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
         <label class="inline">Trier par
           <select id="sort">
             <option value="added">Date d'ajout</option>
-            <option value="recent">Date de lecture</option>
             <option value="title">Titre (A → Z)</option>
             <option value="author">Auteur (A → Z)</option>
             <option value="year">Année de parution</option>
@@ -315,8 +313,7 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
           <datalist id="dl-countries"></datalist>
           <datalist id="dl-genres"></datalist>
           <label class="c6">Résumé<textarea class="field" id="f-summary"></textarea></label>
-          <label class="c3 half">Lu le<input class="field" id="f-finished" type="date"></label>
-          <label class="c3 half">Ma note
+          <label class="c2 half">Ma note
             <select class="field" id="f-rating">
               <option value="">Pas de note</option>
               <option value="5">5 ★★★★★</option>
@@ -355,7 +352,10 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
   // Préférences d'affichage, gardées sur cet appareil.
   const pref = (k, d) => { try { return localStorage.getItem("biblio." + k) || d; } catch { return d; } };
   const savePref = (k, v) => { try { localStorage.setItem("biblio." + k, v); } catch {} };
+  const GROUPS = ["genre", "country", "author", "publisher"];
   let filter = { q: "", sort: pref("sort", "added"), group: pref("group", "genre"), layout: pref("layout", "rows") };
+  if (!GROUPS.includes(filter.group)) filter.group = "genre";
+  if (filter.sort === "recent") filter.sort = "added";
   let editing = null;        // livre en cours d'édition (null = nouveau)
 
   // ---------- utilitaires ----------
@@ -432,12 +432,11 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
 
   // ---------- affichage ----------
   // Catégories : un livre à plusieurs genres compte dans chacun d'eux.
-  const MISSING = { genre: "Sans genre", country: "Pays non renseigné", author: "Auteur inconnu", year: "Date de lecture inconnue", publisher: "Éditeur inconnu" };
+  const MISSING = { genre: "Sans genre", country: "Pays non renseigné", author: "Auteur inconnu", publisher: "Éditeur inconnu" };
   const keysOf = (b, g) => ({
     genre: b.genres?.length ? b.genres : [MISSING.genre],
     country: [b.country || MISSING.country],
     author: b.author ? b.author.split(/\s+et\s+|,\s*/).map((s) => s.replace(/\s*\(dir\.\)$/, "")) : [MISSING.author],
-    year: [b.finished_at ? b.finished_at.slice(0, 4) : MISSING.year],
     publisher: [b.publisher ? b.publisher.replace(/\s*\(.*\)$/, "") : MISSING.publisher],
   }[g]);
   function categories(g) {
@@ -449,8 +448,7 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
     }
     const missing = (c) => Object.values(MISSING).includes(c.label);
     return [...m.values()].sort((a, b) => missing(a) - missing(b) ||
-      (g === "year" ? b.label.localeCompare(a.label)
-        : b.items.length - a.items.length || a.label.localeCompare(b.label, "fr")));
+      b.items.length - a.items.length || a.label.localeCompare(b.label, "fr"));
   }
 
   // L'adresse dit ce qui est affiché : #genre/Roman, #tous, ou rien pour l'accueil.
@@ -458,18 +456,17 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
     const h = decodeURIComponent(location.hash.slice(1));
     if (h === "tous") return { all: true };
     const i = h.indexOf("/");
-    if (i > 0 && ["genre", "country", "author", "year", "publisher"].includes(h.slice(0, i))) return { group: h.slice(0, i), cat: h.slice(i + 1) };
+    if (i > 0 && GROUPS.includes(h.slice(0, i))) return { group: h.slice(0, i), cat: h.slice(i + 1) };
     return null;
   }
   window.addEventListener("hashchange", () => { window.scrollTo(0, 0); render(); });
 
   function render() {
-    const year = new Date().getFullYear();
     const read = books;
     const rated = read.filter((b) => b.rating);
     const st = [
       [read.length, "livres lus"],
-      [read.filter((b) => b.finished_at && +b.finished_at.slice(0, 4) === year).length, "lus en " + year],
+      [new Set(read.flatMap((b) => keysOf(b, "author")).filter((a) => a !== MISSING.author).map(norm)).size, "auteurs"],
       [read.reduce((s, b) => s + (b.pages || 0), 0).toLocaleString("fr-FR"), "pages lues"],
       [rated.length ? (rated.reduce((s, b) => s + b.rating, 0) / rated.length).toFixed(1).replace(".", ",") : "–", "note moyenne"],
     ];
@@ -494,7 +491,6 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
     list = list.filter((b) => (!q || norm([b.title, b.author, b.publisher, b.isbn, b.country, (b.genres || []).join(" ")].join(" ")).includes(q)));
     const cmp = {
       added: (a, b) => b.created_at.localeCompare(a.created_at),
-      recent: (a, b) => (b.finished_at || "").localeCompare(a.finished_at || "") || b.created_at.localeCompare(a.created_at),
       title: (a, b) => a.title.localeCompare(b.title, "fr"),
       author: (a, b) => (a.author || "").localeCompare(b.author || "", "fr") || a.title.localeCompare(b.title, "fr"),
       year: (a, b) => (b.year || 0) - (a.year || 0),
@@ -692,7 +688,6 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
     $("#f-genres").value = (b.genres || []).join(", ");
     $("#f-cover").value = b.cover_url || "";
     $("#f-summary").value = b.summary || "";
-    $("#f-finished").value = b.finished_at || (book ? "" : new Date().toISOString().slice(0, 10));
     $("#f-review").value = b.review || "";
     $("#book-form").dataset.source = b.source || "manuel";
     $("#f-rating").value = b.rating || ""; previewCover();
@@ -715,7 +710,6 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
       cover_url: $("#f-cover").value.trim() || null,
       summary: $("#f-summary").value.trim() || null,
       status: "lu",
-      finished_at: $("#f-finished").value || null,
       rating: intOrNull($("#f-rating").value),
       review: $("#f-review").value.trim() || null,
     };
