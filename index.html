@@ -84,6 +84,15 @@ h1 { font: 400 clamp(1.7rem, 4vw, 2.4rem)/1.05 var(--display); margin: 0; letter
 .btn.danger { color: var(--danger); }
 .btn:disabled { opacity: .5; cursor: default; }
 
+.filters { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: end; padding-block: 0 20px; margin-top: -6px; }
+.filters label { display: flex; flex-direction: column; gap: 4px; font: 500 .68rem/1.3 var(--mono); text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+.filters select { font: .9rem var(--body); text-transform: none; letter-spacing: 0; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; max-width: 200px; }
+.filters select.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.link { border: 0; background: none; color: var(--accent); cursor: pointer; padding: 8px 0; text-decoration: underline; font-size: .9rem; }
+.rayon { padding-block: 0 8px; }
+.rayon h2 { display: flex; align-items: baseline; gap: 10px; font: 400 1.3rem/1.2 var(--display); margin: 8px 0 16px; padding-bottom: 8px; border-bottom: 2px solid var(--shelf); }
+.rayon h2 small { font: 500 .72rem/1 var(--mono); color: var(--muted); letter-spacing: .06em; }
+
 /* Rayonnage */
 .shelf { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 28px 20px; padding-block: 4px 48px; }
 .book { background: none; border: 0; padding: 0; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
@@ -215,6 +224,21 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
       </select>
       <button class="btn primary" id="add" type="button">+ Ajouter un livre</button>
     </div>
+    <div class="filters">
+      <label>Genre<select id="fl-genre"></select></label>
+      <label>Pays<select id="fl-country"></select></label>
+      <label>Lu en<select id="fl-year"></select></label>
+      <label>Ranger par
+        <select id="group">
+          <option value="">Pas de rayons</option>
+          <option value="genre">Genre</option>
+          <option value="country">Pays</option>
+          <option value="year">Année de lecture</option>
+          <option value="author">Auteur</option>
+        </select>
+      </label>
+      <button class="link" id="fl-reset" type="button" hidden>Effacer les filtres</button>
+    </div>
     <div class="note" id="loading">Chargement de vos livres…</div>
     <div class="shelf" id="shelf"></div>
     <div class="empty" id="empty" hidden>
@@ -253,11 +277,14 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
           <label class="c6">Titre<input class="field" id="f-title" required></label>
           <label class="c4">Auteur<input class="field" id="f-author"></label>
           <label class="c2 half">Année<input class="field" id="f-year" type="number" inputmode="numeric"></label>
-          <label class="c3">Éditeur<input class="field" id="f-publisher"></label>
+          <label class="c4">Éditeur<input class="field" id="f-publisher"></label>
           <label class="c2 half">Pages<input class="field" id="f-pages" type="number" inputmode="numeric"></label>
-          <label class="c3">ISBN<input class="field" id="f-isbn"></label>
-          <label class="c3">Genres<input class="field" id="f-genres" placeholder="roman, policier…"></label>
-          <label class="c6">Couverture (adresse de l'image)<input class="field" id="f-cover" type="url"></label>
+          <label class="c2 half">Pays<input class="field" id="f-country" list="dl-countries" placeholder="France"></label>
+          <label class="c4">Genres<input class="field" id="f-genres" list="dl-genres" placeholder="roman, policier…"></label>
+          <label class="c2">ISBN<input class="field" id="f-isbn"></label>
+          <label class="c4">Couverture (adresse de l'image)<input class="field" id="f-cover" type="url"></label>
+          <datalist id="dl-countries"></datalist>
+          <datalist id="dl-genres"></datalist>
           <label class="c6">Résumé<textarea class="field" id="f-summary"></textarea></label>
           <label class="c2">Statut
             <select class="field" id="f-status">
@@ -296,7 +323,8 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
   const STATUS = { lu: "Lu", en_cours: "En cours", a_lire: "À lire", abandonne: "Abandonné" };
 
   let sb = null, user = null, books = [], channel = null;
-  let filter = { q: "", status: "", sort: "recent" };
+  let filter = { q: "", status: "", sort: "recent", genre: "", country: "", year: "", group: "" };
+  const NONE = "__aucun__";  // valeur de filtre « non renseigné »
   let editing = null;        // livre en cours d'édition (null = nouveau)
   let rating = 0;
 
@@ -386,9 +414,14 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
     ];
     $("#stats").innerHTML = st.map(([v, l]) => `<div class="stat"><b>${v}</b><span>${l}</span></div>`).join("");
 
+    renderFacets();
     const q = norm(filter.q);
+    const facet = (want, vals) => !want || (want === NONE ? !vals.length : vals.some((v) => norm(v) === norm(want)));
     let list = books.filter((b) => (!filter.status || b.status === filter.status) &&
-      (!q || norm([b.title, b.author, b.publisher, b.isbn, (b.genres || []).join(" ")].join(" ")).includes(q)));
+      facet(filter.genre, b.genres || []) &&
+      facet(filter.country, b.country ? [b.country] : []) &&
+      facet(filter.year, b.finished_at ? [b.finished_at.slice(0, 4)] : []) &&
+      (!q || norm([b.title, b.author, b.publisher, b.isbn, b.country, (b.genres || []).join(" ")].join(" ")).includes(q)));
     const cmp = {
       recent: (a, b) => (b.finished_at || "").localeCompare(a.finished_at || "") || b.created_at.localeCompare(a.created_at),
       added: (a, b) => b.created_at.localeCompare(a.created_at),
@@ -400,14 +433,75 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
 
     $("#empty").hidden = books.length > 0;
     $("#no-match").hidden = !(books.length && !list.length);
-    $("#shelf").innerHTML = list.map((b) => `
+    const card = (b) => `
       <button class="book" type="button" data-id="${b.id}">
         ${coverBlock(b)}
         <span class="title">${esc(b.title)}</span>
         <span class="author">${esc(b.author || "")}${b.year ? " · " + b.year : ""}</span>
         <span class="meta"><span class="chip ${b.status}">${STATUS[b.status]}</span><span class="stars" aria-label="${b.rating || 0} sur 5">${stars(b.rating)}</span></span>
-      </button>`).join("");
+      </button>`;
+
+    if (!filter.group) {
+      $("#shelf").className = "shelf";
+      $("#shelf").innerHTML = list.map(card).join("");
+      return;
+    }
+    // Rayons : un livre à plusieurs genres apparaît dans chacun d'eux.
+    const keyOf = {
+      genre: (b) => b.genres?.length ? b.genres : ["Sans genre"],
+      country: (b) => [b.country || "Pays non renseigné"],
+      year: (b) => [b.finished_at ? b.finished_at.slice(0, 4) : "Pas encore terminé"],
+      author: (b) => [b.author || "Auteur inconnu"],
+    }[filter.group];
+    const groups = new Map();
+    for (const b of list) for (const k of keyOf(b)) {
+      const id = norm(k);
+      if (!groups.has(id)) groups.set(id, { label: k, items: [] });
+      groups.get(id).items.push(b);
+    }
+    const isMissing = (l) => /^(Sans genre|Pays non renseigné|Pas encore terminé|Auteur inconnu)$/.test(l);
+    const ordered = [...groups.values()].sort((a, b) =>
+      isMissing(a.label) - isMissing(b.label) ||
+      (filter.group === "year" ? b.label.localeCompare(a.label) : b.items.length - a.items.length || a.label.localeCompare(b.label, "fr")));
+    $("#shelf").className = "";
+    $("#shelf").innerHTML = ordered.map((g) => `
+      <section class="rayon">
+        <h2>${esc(g.label)} <small>${g.items.length} livre${g.items.length > 1 ? "s" : ""}</small></h2>
+        <div class="shelf">${g.items.map(card).join("")}</div>
+      </section>`).join("");
   }
+
+  // Menus de filtre et suggestions, construits à partir des livres présents.
+  function counts(values) {
+    const m = new Map();
+    for (const v of values) { const k = norm(v); const e = m.get(k) || { label: v, n: 0 }; e.n++; m.set(k, e); }
+    return [...m.values()];
+  }
+  function fillSelect(sel, all, items, current, missing) {
+    const opts = [`<option value="">${all}</option>`]
+      .concat(items.map((i) => `<option value="${esc(i.label)}">${esc(i.label)} (${i.n})</option>`));
+    if (missing) opts.push(`<option value="${NONE}">${missing}</option>`);
+    sel.innerHTML = opts.join("");
+    sel.value = current;
+    if (sel.value !== current) sel.value = "";
+    sel.classList.toggle("on", !!sel.value);
+  }
+  function renderFacets() {
+    const genres = counts(books.flatMap((b) => b.genres || [])).sort((a, b) => a.label.localeCompare(b.label, "fr"));
+    const countries = counts(books.map((b) => b.country).filter(Boolean)).sort((a, b) => a.label.localeCompare(b.label, "fr"));
+    const years = counts(books.map((b) => b.finished_at?.slice(0, 4)).filter(Boolean)).sort((a, b) => b.label.localeCompare(a.label));
+    fillSelect($("#fl-genre"), "Tous", genres, filter.genre, "Sans genre");
+    fillSelect($("#fl-country"), "Tous", countries, filter.country, "Non renseigné");
+    fillSelect($("#fl-year"), "Toutes", years, filter.year, "Pas terminé");
+    filter.genre = $("#fl-genre").value; filter.country = $("#fl-country").value; filter.year = $("#fl-year").value;
+    $("#fl-reset").hidden = !(filter.genre || filter.country || filter.year);
+    $("#dl-countries").innerHTML = countries.map((c) => `<option value="${esc(c.label)}">`).join("");
+    $("#dl-genres").innerHTML = genres.map((g) => `<option value="${esc(g.label)}">`).join("");
+  }
+  for (const [id, key] of [["#fl-genre", "genre"], ["#fl-country", "country"], ["#fl-year", "year"], ["#group", "group"]]) {
+    $(id).addEventListener("change", (e) => { filter[key] = e.target.value; render(); });
+  }
+  $("#fl-reset").addEventListener("click", () => { filter.genre = filter.country = filter.year = ""; render(); });
 
   $("#q").addEventListener("input", (e) => { filter.q = e.target.value; render(); });
   $("#sort").addEventListener("change", (e) => { filter.sort = e.target.value; render(); });
@@ -544,6 +638,7 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
     $("#f-publisher").value = b.publisher || "";
     $("#f-pages").value = b.pages ?? "";
     $("#f-isbn").value = b.isbn || "";
+    $("#f-country").value = b.country || "";
     $("#f-genres").value = (b.genres || []).join(", ");
     $("#f-cover").value = b.cover_url || "";
     $("#f-summary").value = b.summary || "";
@@ -566,6 +661,7 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
       publisher: $("#f-publisher").value.trim() || null,
       pages: intOrNull($("#f-pages").value),
       isbn: $("#f-isbn").value.trim() || null,
+      country: $("#f-country").value.trim() || null,
       genres: $("#f-genres").value.split(",").map((s) => s.trim()).filter(Boolean),
       cover_url: $("#f-cover").value.trim() || null,
       summary: $("#f-summary").value.trim() || null,
