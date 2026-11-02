@@ -286,7 +286,7 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
         <input class="field" id="search-q" type="search" placeholder="Titre, auteur ou ISBN" autocomplete="off">
         <button class="btn primary" type="submit">Chercher</button>
       </form>
-      <div class="note" id="search-msg">Recherche dans Open Library<span id="gb-on" hidden> et Google Books</span>.</div>
+      <div class="note" id="search-msg">Recherche dans le catalogue de la BnF, Open Library<span id="gb-on" hidden> et Google Books</span>.</div>
       <div class="results" id="results"></div>
     </div>
     <div class="dlg-foot"><button class="btn" type="button" id="manual">Saisir à la main</button></div>
@@ -585,17 +585,57 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
     $("#results").innerHTML = "";
     const isbn = q.replace(/[-\s]/g, "");
     const isIsbn = /^(\d{9}[\dXx]|\d{13})$/.test(isbn);
-    const [ol, gb] = await Promise.all([searchOL(q, isIsbn ? isbn : null), searchGB(q, isIsbn ? isbn : null)]);
-    found = interleave(gb, ol);
+    const [bnf, ol, gb] = await Promise.all([searchBnF(q, isIsbn ? isbn : null), searchOL(q, isIsbn ? isbn : null), searchGB(q, isIsbn ? isbn : null)]);
+    found = interleave(bnf, gb, ol);
     $("#search-msg").textContent = found.length ? `${found.length} résultat${found.length > 1 ? "s" : ""}. Choisissez la bonne édition.` : "Aucun résultat. Essayez un autre titre, ou saisissez le livre à la main.";
     $("#results").innerHTML = found.map((r, i) => `
       <button class="result" type="button" data-i="${i}">
-        <span class="thumb">${r.cover_url ? `<img src="${esc(r.cover_url)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ""}</span>
+        <span class="thumb">${r.cover_url ? `<img src="${esc(r.cover_url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}</span>
         <span><span class="r-t">${esc(r.title)}</span><br><span class="r-s">${esc([r.author, r.year, r.publisher].filter(Boolean).join(" · "))}</span></span>
-        <span class="src">${r.source === "google" ? "Google" : "Open Library"}</span>
+        <span class="src">${{ google: "Google", bnf: "BnF", openlibrary: "Open Library" }[r.source]}</span>
       </button>`).join("");
   });
-  function interleave(a, b) { const out = []; for (let i = 0; i < Math.max(a.length, b.length); i++) { if (a[i]) out.push(a[i]); if (b[i]) out.push(b[i]); } return out; }
+  function interleave(...lists) {
+    const out = [], n = Math.max(...lists.map((l) => l.length));
+    for (let i = 0; i < n; i++) for (const l of lists) if (l[i]) out.push(l[i]);
+    return out;
+  }
+
+  // Catalogue de la Bibliothèque nationale de France (SRU, notices Dublin Core).
+  async function searchBnF(q, isbn) {
+    try {
+      const words = q.replace(/["\\]/g, " ").trim();
+      const cql = isbn ? `bib.isbn all "${isbn}"` : `bib.anywhere all "${words}"`;
+      const url = "https://catalogue.bnf.fr/api/SRU?version=1.2&operation=searchRetrieve&recordSchema=dublincore&maximumRecords=12&query=" + encodeURIComponent(cql);
+      const r = await fetch(url); if (!r.ok) return [];
+      const xml = new DOMParser().parseFromString(await r.text(), "text/xml");
+      const DC = "http://purl.org/dc/elements/1.1/";
+      return [...xml.getElementsByTagNameNS("http://www.openarchives.org/OAI/2.0/oai_dc/", "dc")].map((rec) => {
+        const all = (tag) => [...rec.getElementsByTagNameNS(DC, tag)].map((e) => e.textContent.trim());
+        if (!all("type").some((t) => /texte imprimé/i.test(t))) return null;
+        const person = (c) => {     // « Patino, Bruno (1965-....). Auteur du texte » → « Bruno Patino »
+          const name = c.replace(/\s*\(.*$/, "").replace(/\.\s*[A-ZÉ][^.]*$/, "").trim();
+          const [last, first] = name.split(/,\s*/);
+          return first ? `${first} ${last}` : last;
+        };
+        const authors = all("creator").filter((c) => /Auteur/i.test(c)).map(person);
+        const isbn13 = (all("identifier").find((i) => /^ISBN/.test(i)) || "").replace(/^ISBN\s*/, "").replace(/-/g, "");
+        const pages = (all("format")[0] || "").match(/(\d+)\s*p\./);
+        return {
+          source: "bnf",
+          title: (all("title")[0] || "").split(" / ")[0].trim(),
+          author: (authors.length ? authors : all("creator").slice(0, 1).map(person)).join(" et "),
+          year: intOrNull((all("date")[0] || "").match(/\d{4}/)?.[0]),
+          publisher: (all("publisher")[0] || "").replace(/\s*\([^)]*\)\s*$/, ""),
+          pages: pages ? +pages[1] : null,
+          isbn: isbn13,
+          genres: [...new Set(all("subject").map((x) => x.split(" -- ")[0]))].slice(0, 3),
+          summary: "",
+          cover_url: isbn13 ? `https://covers.openlibrary.org/b/isbn/${isbn13}-L.jpg?default=false` : "",
+        };
+      }).filter((b) => b && b.title);
+    } catch { return []; }
+  }
 
   async function searchOL(q, isbn) {
     try {
@@ -634,6 +674,11 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
   }
 
   // Complète le résumé manquant : description de l'œuvre Open Library, sinon Google Books par ISBN.
+  const imageLoads = (url) => new Promise((ok) => {
+    const i = new Image(); i.referrerPolicy = "no-referrer";
+    i.onload = () => ok(i.naturalWidth > 1); i.onerror = () => ok(false); i.src = url;
+    setTimeout(() => ok(false), 6000);
+  });
   async function enrich(b) {
     if (!b.summary && b.ol_key) {
       try {
@@ -646,6 +691,7 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
       const [g] = await searchGB("", b.isbn);
       if (g) { b.summary = g.summary; if (!b.cover_url) b.cover_url = g.cover_url; if (!b.pages) b.pages = g.pages; }
     }
+    if (b.cover_url && !(await imageLoads(b.cover_url))) b.cover_url = "";
     return b;
   }
 
