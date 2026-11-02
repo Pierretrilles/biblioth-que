@@ -332,11 +332,14 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
   sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
   if (cfg.googleBooksKey) $("#gb-on").hidden = false;
 
+  let authKnown = false;
   sb.auth.onAuthStateChange((_evt, session) => {
     const u = session?.user || null;
-    if (u?.id === user?.id) return;
+    if (authKnown && u?.id === user?.id) return;
+    authKnown = true;
     user = u;
-    if (user) startApp(); else { stopSync(); show("#gate-login"); }
+    // Hors du rappel : Supabase bloque les requêtes lancées depuis onAuthStateChange.
+    setTimeout(() => { if (user) startApp(); else { stopSync(); show("#gate-login"); } }, 0);
   });
 
   $("#login-form").addEventListener("submit", async (e) => {
