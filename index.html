@@ -84,14 +84,40 @@ h1 { font: 400 clamp(1.7rem, 4vw, 2.4rem)/1.05 var(--display); margin: 0; letter
 .btn.danger { color: var(--danger); }
 .btn:disabled { opacity: .5; cursor: default; }
 
-.filters { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: end; padding-block: 0 20px; margin-top: -6px; }
-.filters label { display: flex; flex-direction: column; gap: 4px; font: 500 .68rem/1.3 var(--mono); text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
-.filters select { font: .9rem var(--body); text-transform: none; letter-spacing: 0; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; max-width: 200px; }
-.filters select.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
-.link { border: 0; background: none; color: var(--accent); cursor: pointer; padding: 8px 0; text-decoration: underline; font-size: .9rem; }
-.rayon { padding-block: 0 8px; }
-.rayon h2 { display: flex; align-items: baseline; gap: 10px; font: 400 1.3rem/1.2 var(--display); margin: 8px 0 16px; padding-bottom: 8px; border-bottom: 2px solid var(--shelf); }
-.rayon h2 small { font: 500 .72rem/1 var(--mono); color: var(--muted); letter-spacing: .06em; }
+.lbl, label.inline { font: 500 .68rem/1.3 var(--mono); text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+label.inline { display: flex; align-items: center; gap: 8px; }
+label.inline select { font: .9rem var(--body); text-transform: none; letter-spacing: 0; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+.seg.wrapping { flex-wrap: wrap; }
+.home-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding-block: 0 18px; }
+.link { border: 0; background: none; color: var(--accent); cursor: pointer; padding: 0; text-decoration: none; font-size: .9rem; }
+.link:hover { text-decoration: underline; }
+
+/* Accueil : catégories */
+.cats { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; padding-block: 0 48px; }
+.cat { color: var(--ink); text-decoration: none; display: flex; flex-direction: column; gap: 6px; text-align: left; cursor: pointer; background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--shelf); border-radius: 6px 10px 10px 6px; padding: 14px 16px; min-width: 0; }
+.cat:hover { border-color: var(--accent); border-left-color: var(--accent); }
+.cat.all { background: var(--shelf); color: var(--on-shelf); border-color: var(--shelf); }
+.cat .name { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.cat .name b { font: 400 1.2rem/1.2 var(--display); overflow-wrap: anywhere; }
+.cat .name span { font: 500 .75rem/1 var(--mono); color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cat.all .name span, .cat.all .peek { color: inherit; opacity: .75; }
+.cat .peek { color: var(--muted); font-size: .85rem; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.cat.missing { border-left-color: var(--line); }
+
+/* Liste de livres */
+.list-head { display: flex; flex-direction: column; gap: 6px; }
+.list-head h2 { font: 400 clamp(1.4rem, 3vw, 1.9rem)/1.15 var(--display); margin: 0; text-wrap: balance; }
+.list-head h2 small { font: 500 .75rem/1 var(--mono); color: var(--muted); letter-spacing: .05em; }
+.rows { display: flex; flex-direction: column; border-top: 1px solid var(--line); margin-bottom: 48px; }
+.row { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto auto auto; gap: 14px; align-items: center; padding: 10px 4px; border: 0; border-bottom: 1px solid var(--line); background: none; text-align: left; cursor: pointer; width: 100%; }
+.row:hover { background: var(--card); }
+.row .cover { width: 40px; border-radius: 2px 3px 3px 2px; box-shadow: none; }
+.row .cover.gen { padding: 0; }
+.row .cover.gen span { display: none; }
+.row .title { font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+.row .author { color: var(--muted); font-size: .88rem; }
+.row .yr { font: .85rem var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+@media (max-width: 620px) { .row { grid-template-columns: 40px minmax(0, 1fr) auto; } .row .yr, .row .stars { display: none; } }
 
 /* Rayonnage */
 .shelf { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 28px 20px; padding-block: 4px 48px; }
@@ -208,45 +234,64 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
 
   <main class="wrap">
     <div class="toolbar">
-      <input type="search" id="q" placeholder="Chercher dans ma bibliothèque…" aria-label="Chercher dans ma bibliothèque">
-      <div class="seg" id="status-filter" role="group" aria-label="Filtrer par statut">
-        <button type="button" data-v="" aria-pressed="true">Tous</button>
-        <button type="button" data-v="lu" aria-pressed="false">Lus</button>
-        <button type="button" data-v="en_cours" aria-pressed="false">En cours</button>
-        <button type="button" data-v="a_lire" aria-pressed="false">À lire</button>
-      </div>
-      <select id="sort" aria-label="Trier">
-        <option value="recent">Lus récemment</option>
-        <option value="added">Ajoutés récemment</option>
-        <option value="title">Titre</option>
-        <option value="author">Auteur</option>
-        <option value="rating">Note</option>
-      </select>
+      <input type="search" id="q" placeholder="Chercher un titre, un auteur, un éditeur…" aria-label="Chercher dans ma bibliothèque">
       <button class="btn primary" id="add" type="button">+ Ajouter un livre</button>
     </div>
-    <div class="filters">
-      <label>Genre<select id="fl-genre"></select></label>
-      <label>Pays<select id="fl-country"></select></label>
-      <label>Lu en<select id="fl-year"></select></label>
-      <label>Ranger par
-        <select id="group">
-          <option value="">Pas de rayons</option>
-          <option value="genre">Genre</option>
-          <option value="country">Pays</option>
-          <option value="year">Année de lecture</option>
-          <option value="author">Auteur</option>
-        </select>
-      </label>
-      <button class="link" id="fl-reset" type="button" hidden>Effacer les filtres</button>
-    </div>
     <div class="note" id="loading">Chargement de vos livres…</div>
-    <div class="shelf" id="shelf"></div>
+
+    <!-- Accueil : les livres regroupés par catégorie -->
+    <section id="home" hidden>
+      <div class="home-head">
+        <span class="lbl">Classer par</span>
+        <div class="seg wrapping" id="group" role="group" aria-label="Classer par">
+          <button type="button" data-v="genre">Genre</button>
+          <button type="button" data-v="country">Pays</button>
+          <button type="button" data-v="author">Auteur</button>
+          <button type="button" data-v="status">Statut</button>
+          <button type="button" data-v="year">Année de lecture</button>
+          <button type="button" data-v="publisher">Éditeur</button>
+        </div>
+      </div>
+      <div class="cats" id="cats"></div>
+    </section>
+
+    <!-- Les livres d'une catégorie, ou d'une recherche -->
+    <section id="list" hidden>
+      <div class="list-head">
+        <a class="link" href="#" id="back">← Toutes les catégories</a>
+        <h2><span id="list-title"></span> <small id="list-count"></small></h2>
+      </div>
+      <div class="toolbar">
+        <div class="seg" id="status-filter" role="group" aria-label="Filtrer par statut">
+          <button type="button" data-v="" aria-pressed="true">Tous</button>
+          <button type="button" data-v="lu" aria-pressed="false">Lus</button>
+          <button type="button" data-v="en_cours" aria-pressed="false">En cours</button>
+          <button type="button" data-v="a_lire" aria-pressed="false">À lire</button>
+        </div>
+        <label class="inline">Trier par
+          <select id="sort">
+            <option value="added">Date d'ajout</option>
+            <option value="recent">Date de lecture</option>
+            <option value="title">Titre (A → Z)</option>
+            <option value="author">Auteur (A → Z)</option>
+            <option value="year">Année de parution</option>
+            <option value="rating">Note</option>
+          </select>
+        </label>
+        <div class="seg" id="layout" role="group" aria-label="Affichage">
+          <button type="button" data-v="rows">Liste</button>
+          <button type="button" data-v="covers">Couvertures</button>
+        </div>
+      </div>
+      <div id="books"></div>
+      <div class="note" id="no-match" hidden>Aucun livre ne correspond.</div>
+    </section>
+
     <div class="empty" id="empty" hidden>
-      <h2>Votre rayonnage est vide</h2>
+      <h2>Votre bibliothèque est vide</h2>
       <p>Cliquez sur « Ajouter un livre », tapez un titre ou un ISBN, et la fiche se remplit avec la couverture, l'auteur, l'année et le résumé.</p>
       <button class="btn primary" type="button" data-open-add>+ Ajouter mon premier livre</button>
     </div>
-    <div class="note" id="no-match" hidden>Aucun livre ne correspond à cette recherche.</div>
   </main>
 </div>
 
@@ -323,8 +368,10 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
   const STATUS = { lu: "Lu", en_cours: "En cours", a_lire: "À lire", abandonne: "Abandonné" };
 
   let sb = null, user = null, books = [], channel = null;
-  let filter = { q: "", status: "", sort: "recent", genre: "", country: "", year: "", group: "" };
-  const NONE = "__aucun__";  // valeur de filtre « non renseigné »
+  // Préférences d'affichage, gardées sur cet appareil.
+  const pref = (k, d) => { try { return localStorage.getItem("biblio." + k) || d; } catch { return d; } };
+  const savePref = (k, v) => { try { localStorage.setItem("biblio." + k, v); } catch {} };
+  let filter = { q: "", status: "", sort: pref("sort", "added"), group: pref("group", "genre"), layout: pref("layout", "rows") };
   let editing = null;        // livre en cours d'édition (null = nouveau)
   let rating = 0;
 
@@ -401,6 +448,41 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
   }
 
   // ---------- affichage ----------
+  // Catégories : un livre à plusieurs genres compte dans chacun d'eux.
+  const MISSING = { genre: "Sans genre", country: "Pays non renseigné", author: "Auteur inconnu", year: "Pas encore terminé", publisher: "Éditeur inconnu" };
+  const keysOf = (b, g) => ({
+    genre: b.genres?.length ? b.genres : [MISSING.genre],
+    country: [b.country || MISSING.country],
+    author: b.author ? b.author.split(/\s+et\s+|,\s*/).map((s) => s.replace(/\s*\(dir\.\)$/, "")) : [MISSING.author],
+    status: [STATUS[b.status]],
+    year: [b.finished_at ? b.finished_at.slice(0, 4) : MISSING.year],
+    publisher: [b.publisher ? b.publisher.replace(/\s*\(.*\)$/, "") : MISSING.publisher],
+  }[g]);
+  function categories(g) {
+    const m = new Map();
+    for (const b of books) for (const k of keysOf(b, g)) {
+      const id = norm(k);
+      if (!m.has(id)) m.set(id, { label: k, items: [] });
+      m.get(id).items.push(b);
+    }
+    const missing = (c) => Object.values(MISSING).includes(c.label);
+    const order = Object.values(STATUS);
+    return [...m.values()].sort((a, b) => missing(a) - missing(b) ||
+      (g === "status" ? order.indexOf(a.label) - order.indexOf(b.label)
+        : g === "year" ? b.label.localeCompare(a.label)
+        : b.items.length - a.items.length || a.label.localeCompare(b.label, "fr")));
+  }
+
+  // L'adresse dit ce qui est affiché : #genre/Roman, #tous, ou rien pour l'accueil.
+  function route() {
+    const h = decodeURIComponent(location.hash.slice(1));
+    if (h === "tous") return { all: true };
+    const i = h.indexOf("/");
+    if (i > 0 && ["genre", "country", "author", "status", "year", "publisher"].includes(h.slice(0, i))) return { group: h.slice(0, i), cat: h.slice(i + 1) };
+    return null;
+  }
+  window.addEventListener("hashchange", () => { window.scrollTo(0, 0); render(); });
+
   function render() {
     const year = new Date().getFullYear();
     const read = books.filter((b) => b.status === "lu");
@@ -413,108 +495,110 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
       [rated.length ? (rated.reduce((s, b) => s + b.rating, 0) / rated.length).toFixed(1).replace(".", ",") : "–", "note moyenne"],
     ];
     $("#stats").innerHTML = st.map(([v, l]) => `<div class="stat"><b>${v}</b><span>${l}</span></div>`).join("");
+    fillSuggestions();
 
-    renderFacets();
-    const q = norm(filter.q);
-    const facet = (want, vals) => !want || (want === NONE ? !vals.length : vals.some((v) => norm(v) === norm(want)));
-    let list = books.filter((b) => (!filter.status || b.status === filter.status) &&
-      facet(filter.genre, b.genres || []) &&
-      facet(filter.country, b.country ? [b.country] : []) &&
-      facet(filter.year, b.finished_at ? [b.finished_at.slice(0, 4)] : []) &&
+    $("#empty").hidden = books.length > 0;
+    const r = route(), q = norm(filter.q);
+    const showList = books.length && (q || r);
+    $("#home").hidden = !books.length || showList;
+    $("#list").hidden = !showList;
+    if (!books.length) return;
+    if (!showList) return renderHome();
+
+    let list, title;
+    if (q) { list = books; title = `Recherche « ${filter.q.trim()} »`; }
+    else if (r.all) { list = books; title = "Tous les livres"; }
+    else {
+      list = books.filter((b) => keysOf(b, r.group).some((k) => norm(k) === norm(r.cat)));
+      title = r.cat;
+    }
+    list = list.filter((b) => (!filter.status || b.status === filter.status) &&
       (!q || norm([b.title, b.author, b.publisher, b.isbn, b.country, (b.genres || []).join(" ")].join(" ")).includes(q)));
     const cmp = {
-      recent: (a, b) => (b.finished_at || "").localeCompare(a.finished_at || "") || b.created_at.localeCompare(a.created_at),
       added: (a, b) => b.created_at.localeCompare(a.created_at),
+      recent: (a, b) => (b.finished_at || "").localeCompare(a.finished_at || "") || b.created_at.localeCompare(a.created_at),
       title: (a, b) => a.title.localeCompare(b.title, "fr"),
-      author: (a, b) => (a.author || "").localeCompare(b.author || "", "fr"),
+      author: (a, b) => (a.author || "").localeCompare(b.author || "", "fr") || a.title.localeCompare(b.title, "fr"),
+      year: (a, b) => (b.year || 0) - (a.year || 0),
       rating: (a, b) => (b.rating || 0) - (a.rating || 0),
     }[filter.sort];
     list.sort(cmp);
 
-    $("#empty").hidden = books.length > 0;
-    $("#no-match").hidden = !(books.length && !list.length);
-    const card = (b) => `
-      <button class="book" type="button" data-id="${b.id}">
-        ${coverBlock(b)}
-        <span class="title">${esc(b.title)}</span>
-        <span class="author">${esc(b.author || "")}${b.year ? " · " + b.year : ""}</span>
-        <span class="meta"><span class="chip ${b.status}">${STATUS[b.status]}</span><span class="stars" aria-label="${b.rating || 0} sur 5">${stars(b.rating)}</span></span>
-      </button>`;
-
-    if (!filter.group) {
-      $("#shelf").className = "shelf";
-      $("#shelf").innerHTML = list.map(card).join("");
-      return;
+    $("#list-title").textContent = title;
+    $("#list-count").textContent = `${list.length} livre${list.length > 1 ? "s" : ""}`;
+    $("#no-match").hidden = list.length > 0;
+    $("#sort").value = filter.sort;
+    for (const x of $("#layout").children) x.setAttribute("aria-pressed", String(x.dataset.v === filter.layout));
+    if (filter.layout === "covers") {
+      $("#books").className = "shelf";
+      $("#books").innerHTML = list.map((b) => `
+        <button class="book" type="button" data-id="${b.id}">
+          ${coverBlock(b)}
+          <span class="title">${esc(b.title)}</span>
+          <span class="author">${esc(b.author || "")}${b.year ? " · " + b.year : ""}</span>
+          <span class="meta"><span class="chip ${b.status}">${STATUS[b.status]}</span><span class="stars" aria-label="${b.rating || 0} sur 5">${stars(b.rating)}</span></span>
+        </button>`).join("");
+    } else {
+      $("#books").className = "rows";
+      $("#books").innerHTML = list.map((b) => `
+        <button class="row" type="button" data-id="${b.id}">
+          ${coverBlock(b)}
+          <span><span class="title">${esc(b.title)}</span><br><span class="author">${esc(b.author || "")}</span></span>
+          <span class="yr">${b.year || ""}</span>
+          <span class="stars" aria-label="${b.rating || 0} sur 5">${stars(b.rating)}</span>
+          <span class="chip ${b.status}">${STATUS[b.status]}</span>
+        </button>`).join("");
     }
-    // Rayons : un livre à plusieurs genres apparaît dans chacun d'eux.
-    const keyOf = {
-      genre: (b) => b.genres?.length ? b.genres : ["Sans genre"],
-      country: (b) => [b.country || "Pays non renseigné"],
-      year: (b) => [b.finished_at ? b.finished_at.slice(0, 4) : "Pas encore terminé"],
-      author: (b) => [b.author || "Auteur inconnu"],
-    }[filter.group];
-    const groups = new Map();
-    for (const b of list) for (const k of keyOf(b)) {
-      const id = norm(k);
-      if (!groups.has(id)) groups.set(id, { label: k, items: [] });
-      groups.get(id).items.push(b);
-    }
-    const isMissing = (l) => /^(Sans genre|Pays non renseigné|Pas encore terminé|Auteur inconnu)$/.test(l);
-    const ordered = [...groups.values()].sort((a, b) =>
-      isMissing(a.label) - isMissing(b.label) ||
-      (filter.group === "year" ? b.label.localeCompare(a.label) : b.items.length - a.items.length || a.label.localeCompare(b.label, "fr")));
-    $("#shelf").className = "";
-    $("#shelf").innerHTML = ordered.map((g) => `
-      <section class="rayon">
-        <h2>${esc(g.label)} <small>${g.items.length} livre${g.items.length > 1 ? "s" : ""}</small></h2>
-        <div class="shelf">${g.items.map(card).join("")}</div>
-      </section>`).join("");
   }
 
-  // Menus de filtre et suggestions, construits à partir des livres présents.
-  function counts(values) {
-    const m = new Map();
-    for (const v of values) { const k = norm(v); const e = m.get(k) || { label: v, n: 0 }; e.n++; m.set(k, e); }
-    return [...m.values()];
+  function renderHome() {
+    for (const x of $("#group").children) x.setAttribute("aria-pressed", String(x.dataset.v === filter.group));
+    const g = filter.group;
+    const peek = (items) => esc(items.slice().sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 3).map((b) => b.title).join(" · "));
+    const count = (n) => `${n} livre${n > 1 ? "s" : ""}`;
+    $("#cats").innerHTML =
+      `<a class="cat all" href="#tous"><span class="name"><b>Tous les livres</b><span>${count(books.length)}</span></span><span class="peek">${peek(books)}</span></a>` +
+      categories(g).map((c) => `
+        <a class="cat${Object.values(MISSING).includes(c.label) ? " missing" : ""}" href="#${g}/${encodeURIComponent(c.label)}">
+          <span class="name"><b>${esc(c.label)}</b><span>${count(c.items.length)}</span></span>
+          <span class="peek">${peek(c.items)}</span>
+        </a>`).join("");
   }
-  function fillSelect(sel, all, items, current, missing) {
-    const opts = [`<option value="">${all}</option>`]
-      .concat(items.map((i) => `<option value="${esc(i.label)}">${esc(i.label)} (${i.n})</option>`));
-    if (missing) opts.push(`<option value="${NONE}">${missing}</option>`);
-    sel.innerHTML = opts.join("");
-    sel.value = current;
-    if (sel.value !== current) sel.value = "";
-    sel.classList.toggle("on", !!sel.value);
-  }
-  function renderFacets() {
-    const genres = counts(books.flatMap((b) => b.genres || [])).sort((a, b) => a.label.localeCompare(b.label, "fr"));
-    const countries = counts(books.map((b) => b.country).filter(Boolean)).sort((a, b) => a.label.localeCompare(b.label, "fr"));
-    const years = counts(books.map((b) => b.finished_at?.slice(0, 4)).filter(Boolean)).sort((a, b) => b.label.localeCompare(a.label));
-    fillSelect($("#fl-genre"), "Tous", genres, filter.genre, "Sans genre");
-    fillSelect($("#fl-country"), "Tous", countries, filter.country, "Non renseigné");
-    fillSelect($("#fl-year"), "Toutes", years, filter.year, "Pas terminé");
-    filter.genre = $("#fl-genre").value; filter.country = $("#fl-country").value; filter.year = $("#fl-year").value;
-    $("#fl-reset").hidden = !(filter.genre || filter.country || filter.year);
-    $("#dl-countries").innerHTML = countries.map((c) => `<option value="${esc(c.label)}">`).join("");
-    $("#dl-genres").innerHTML = genres.map((g) => `<option value="${esc(g.label)}">`).join("");
-  }
-  for (const [id, key] of [["#fl-genre", "genre"], ["#fl-country", "country"], ["#fl-year", "year"], ["#group", "group"]]) {
-    $(id).addEventListener("change", (e) => { filter[key] = e.target.value; render(); });
-  }
-  $("#fl-reset").addEventListener("click", () => { filter.genre = filter.country = filter.year = ""; render(); });
 
+  // Suggestions de pays et de genres dans la fiche.
+  function fillSuggestions() {
+    const uniq = (xs) => [...new Map(xs.filter(Boolean).map((x) => [norm(x), x])).values()].sort((a, b) => a.localeCompare(b, "fr"));
+    $("#dl-countries").innerHTML = uniq(books.map((b) => b.country)).map((c) => `<option value="${esc(c)}">`).join("");
+    $("#dl-genres").innerHTML = uniq(books.flatMap((b) => b.genres || [])).map((g) => `<option value="${esc(g)}">`).join("");
+  }
+
+  $("#group").addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    filter.group = b.dataset.v; savePref("group", filter.group); render();
+  });
+  $("#layout").addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    filter.layout = b.dataset.v; savePref("layout", filter.layout); render();
+  });
+  $("#sort").addEventListener("change", (e) => { filter.sort = e.target.value; savePref("sort", filter.sort); render(); });
   $("#q").addEventListener("input", (e) => { filter.q = e.target.value; render(); });
-  $("#sort").addEventListener("change", (e) => { filter.sort = e.target.value; render(); });
+  $("#back").addEventListener("click", (e) => {
+    e.preventDefault();
+    filter.q = ""; $("#q").value = "";
+    if (location.hash) history.pushState(null, "", location.pathname + location.search);
+    render();
+  });
   $("#status-filter").addEventListener("click", (e) => {
     const b = e.target.closest("button"); if (!b) return;
     filter.status = b.dataset.v;
     for (const x of $("#status-filter").children) x.setAttribute("aria-pressed", String(x === b));
     render();
   });
-  $("#shelf").addEventListener("click", (e) => {
-    const el = e.target.closest(".book"); if (!el) return;
+  $("#books").addEventListener("click", (e) => {
+    const el = e.target.closest("[data-id]"); if (!el) return;
     openBook(books.find((b) => b.id === el.dataset.id));
   });
+  window.addEventListener("popstate", () => render());
 
   // ---------- dialogues ----------
   for (const d of document.querySelectorAll("dialog")) {
