@@ -109,7 +109,7 @@ label.inline select { font: .9rem var(--body); text-transform: none; letter-spac
 .list-head h2 { font: 400 clamp(1.4rem, 3vw, 1.9rem)/1.15 var(--display); margin: 0; text-wrap: balance; }
 .list-head h2 small { font: 500 .75rem/1 var(--mono); color: var(--muted); letter-spacing: .05em; }
 .rows { display: flex; flex-direction: column; border-top: 1px solid var(--line); margin-bottom: 48px; }
-.row { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto auto auto; gap: 14px; align-items: center; padding: 10px 4px; border: 0; border-bottom: 1px solid var(--line); background: none; text-align: left; cursor: pointer; width: 100%; }
+.row { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto auto; gap: 14px; align-items: center; padding: 10px 4px; border: 0; border-bottom: 1px solid var(--line); background: none; text-align: left; cursor: pointer; width: 100%; }
 .row:hover { background: var(--card); }
 .row .cover { width: 40px; border-radius: 2px 3px 3px 2px; box-shadow: none; }
 .row .cover.gen { padding: 0; }
@@ -117,7 +117,7 @@ label.inline select { font: .9rem var(--body); text-transform: none; letter-spac
 .row .title { font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
 .row .author { color: var(--muted); font-size: .88rem; }
 .row .yr { font: .85rem var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
-@media (max-width: 620px) { .row { grid-template-columns: 40px minmax(0, 1fr) auto; } .row .yr, .row .stars { display: none; } }
+@media (max-width: 620px) { .row { grid-template-columns: 40px minmax(0, 1fr) auto; } .row .yr { display: none; } }
 
 /* Rayonnage */
 .shelf { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 28px 20px; padding-block: 4px 48px; }
@@ -134,11 +134,6 @@ label.inline select { font: .9rem var(--body); text-transform: none; letter-spac
 .book .author { color: var(--muted); font-size: .88rem; }
 .meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: .8rem; }
 .stars { color: var(--accent); letter-spacing: 1px; font-size: .85rem; }
-.chip { font: 500 .68rem/1 var(--mono); text-transform: uppercase; letter-spacing: .06em; padding: 4px 6px; border-radius: 4px; }
-.chip.lu { background: var(--ok-soft); color: var(--ok); }
-.chip.en_cours { background: var(--info-soft); color: var(--info); }
-.chip.a_lire { background: var(--warn-soft); color: var(--warn); }
-.chip.abandonne { background: var(--line); color: var(--muted); }
 
 .empty { border: 1px dashed var(--line); border-radius: 12px; padding: 40px 24px; text-align: center; color: var(--muted); max-width: 560px; margin: 24px auto 64px; }
 .empty h2 { font: 400 1.5rem/1.2 var(--display); color: var(--ink); margin: 0 0 8px; }
@@ -243,7 +238,6 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
           <button type="button" data-v="genre">Genre</button>
           <button type="button" data-v="country">Pays</button>
           <button type="button" data-v="author">Auteur</button>
-          <button type="button" data-v="status">Statut</button>
           <button type="button" data-v="year">Année de lecture</button>
           <button type="button" data-v="publisher">Éditeur</button>
         </div>
@@ -258,12 +252,6 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
         <h2><span id="list-title"></span> <small id="list-count"></small></h2>
       </div>
       <div class="toolbar">
-        <div class="seg" id="status-filter" role="group" aria-label="Filtrer par statut">
-          <button type="button" data-v="" aria-pressed="true">Tous</button>
-          <button type="button" data-v="lu" aria-pressed="false">Lus</button>
-          <button type="button" data-v="en_cours" aria-pressed="false">En cours</button>
-          <button type="button" data-v="a_lire" aria-pressed="false">À lire</button>
-        </div>
         <label class="inline">Trier par
           <select id="sort">
             <option value="added">Date d'ajout</option>
@@ -327,16 +315,8 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
           <datalist id="dl-countries"></datalist>
           <datalist id="dl-genres"></datalist>
           <label class="c6">Résumé<textarea class="field" id="f-summary"></textarea></label>
-          <label class="c2">Statut
-            <select class="field" id="f-status">
-              <option value="lu">Lu</option>
-              <option value="en_cours">En cours</option>
-              <option value="a_lire">À lire</option>
-              <option value="abandonne">Abandonné</option>
-            </select>
-          </label>
-          <label class="c2 half">Terminé le<input class="field" id="f-finished" type="date"></label>
-          <label class="c2 half">Ma note
+          <label class="c3 half">Lu le<input class="field" id="f-finished" type="date"></label>
+          <label class="c3 half">Ma note
             <select class="field" id="f-rating">
               <option value="">Pas de note</option>
               <option value="5">5 ★★★★★</option>
@@ -346,7 +326,6 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
               <option value="1">1 ★</option>
             </select>
           </label>
-          </div>
           <label class="c6">Mon avis<textarea class="field" id="f-review" placeholder="Ce que j'en ai pensé, une citation, à qui le conseiller…"></textarea></label>
         </div>
       </div>
@@ -371,13 +350,12 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
 (() => {
   const $ = (s) => document.querySelector(s);
   const cfg = window.BIBLIO_CONFIG || {};
-  const STATUS = { lu: "Lu", en_cours: "En cours", a_lire: "À lire", abandonne: "Abandonné" };
 
   let sb = null, user = null, books = [], channel = null;
   // Préférences d'affichage, gardées sur cet appareil.
   const pref = (k, d) => { try { return localStorage.getItem("biblio." + k) || d; } catch { return d; } };
   const savePref = (k, v) => { try { localStorage.setItem("biblio." + k, v); } catch {} };
-  let filter = { q: "", status: "", sort: pref("sort", "added"), group: pref("group", "genre"), layout: pref("layout", "rows") };
+  let filter = { q: "", sort: pref("sort", "added"), group: pref("group", "genre"), layout: pref("layout", "rows") };
   let editing = null;        // livre en cours d'édition (null = nouveau)
 
   // ---------- utilitaires ----------
@@ -454,12 +432,11 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
 
   // ---------- affichage ----------
   // Catégories : un livre à plusieurs genres compte dans chacun d'eux.
-  const MISSING = { genre: "Sans genre", country: "Pays non renseigné", author: "Auteur inconnu", year: "Pas encore terminé", publisher: "Éditeur inconnu" };
+  const MISSING = { genre: "Sans genre", country: "Pays non renseigné", author: "Auteur inconnu", year: "Date de lecture inconnue", publisher: "Éditeur inconnu" };
   const keysOf = (b, g) => ({
     genre: b.genres?.length ? b.genres : [MISSING.genre],
     country: [b.country || MISSING.country],
     author: b.author ? b.author.split(/\s+et\s+|,\s*/).map((s) => s.replace(/\s*\(dir\.\)$/, "")) : [MISSING.author],
-    status: [STATUS[b.status]],
     year: [b.finished_at ? b.finished_at.slice(0, 4) : MISSING.year],
     publisher: [b.publisher ? b.publisher.replace(/\s*\(.*\)$/, "") : MISSING.publisher],
   }[g]);
@@ -471,10 +448,8 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
       m.get(id).items.push(b);
     }
     const missing = (c) => Object.values(MISSING).includes(c.label);
-    const order = Object.values(STATUS);
     return [...m.values()].sort((a, b) => missing(a) - missing(b) ||
-      (g === "status" ? order.indexOf(a.label) - order.indexOf(b.label)
-        : g === "year" ? b.label.localeCompare(a.label)
+      (g === "year" ? b.label.localeCompare(a.label)
         : b.items.length - a.items.length || a.label.localeCompare(b.label, "fr")));
   }
 
@@ -483,20 +458,19 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
     const h = decodeURIComponent(location.hash.slice(1));
     if (h === "tous") return { all: true };
     const i = h.indexOf("/");
-    if (i > 0 && ["genre", "country", "author", "status", "year", "publisher"].includes(h.slice(0, i))) return { group: h.slice(0, i), cat: h.slice(i + 1) };
+    if (i > 0 && ["genre", "country", "author", "year", "publisher"].includes(h.slice(0, i))) return { group: h.slice(0, i), cat: h.slice(i + 1) };
     return null;
   }
   window.addEventListener("hashchange", () => { window.scrollTo(0, 0); render(); });
 
   function render() {
     const year = new Date().getFullYear();
-    const read = books.filter((b) => b.status === "lu");
+    const read = books;
     const rated = read.filter((b) => b.rating);
     const st = [
       [read.length, "livres lus"],
       [read.filter((b) => b.finished_at && +b.finished_at.slice(0, 4) === year).length, "lus en " + year],
       [read.reduce((s, b) => s + (b.pages || 0), 0).toLocaleString("fr-FR"), "pages lues"],
-      [books.filter((b) => b.status === "en_cours").length, "en cours"],
       [rated.length ? (rated.reduce((s, b) => s + b.rating, 0) / rated.length).toFixed(1).replace(".", ",") : "–", "note moyenne"],
     ];
     $("#stats").innerHTML = st.map(([v, l]) => `<div class="stat"><b>${v}</b><span>${l}</span></div>`).join("");
@@ -517,8 +491,7 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
       list = books.filter((b) => keysOf(b, r.group).some((k) => norm(k) === norm(r.cat)));
       title = r.cat;
     }
-    list = list.filter((b) => (!filter.status || b.status === filter.status) &&
-      (!q || norm([b.title, b.author, b.publisher, b.isbn, b.country, (b.genres || []).join(" ")].join(" ")).includes(q)));
+    list = list.filter((b) => (!q || norm([b.title, b.author, b.publisher, b.isbn, b.country, (b.genres || []).join(" ")].join(" ")).includes(q)));
     const cmp = {
       added: (a, b) => b.created_at.localeCompare(a.created_at),
       recent: (a, b) => (b.finished_at || "").localeCompare(a.finished_at || "") || b.created_at.localeCompare(a.created_at),
@@ -541,7 +514,7 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
           ${coverBlock(b)}
           <span class="title">${esc(b.title)}</span>
           <span class="author">${esc(b.author || "")}${b.year ? " · " + b.year : ""}</span>
-          <span class="meta"><span class="chip ${b.status}">${STATUS[b.status]}</span><span class="stars" aria-label="${b.rating || 0} sur 5">${stars(b.rating)}</span></span>
+          <span class="meta"><span class="stars" aria-label="${b.rating || 0} sur 5">${stars(b.rating)}</span></span>
         </button>`).join("");
     } else {
       $("#books").className = "rows";
@@ -551,7 +524,6 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
           <span><span class="title">${esc(b.title)}</span><br><span class="author">${esc(b.author || "")}</span></span>
           <span class="yr">${b.year || ""}</span>
           <span class="stars" aria-label="${b.rating || 0} sur 5">${stars(b.rating)}</span>
-          <span class="chip ${b.status}">${STATUS[b.status]}</span>
         </button>`).join("");
     }
   }
@@ -591,12 +563,6 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
     e.preventDefault();
     filter.q = ""; $("#q").value = "";
     if (location.hash) history.pushState(null, "", location.pathname + location.search);
-    render();
-  });
-  $("#status-filter").addEventListener("click", (e) => {
-    const b = e.target.closest("button"); if (!b) return;
-    filter.status = b.dataset.v;
-    for (const x of $("#status-filter").children) x.setAttribute("aria-pressed", String(x === b));
     render();
   });
   $("#books").addEventListener("click", (e) => {
@@ -714,7 +680,7 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
 
   function openBook(book, draft) {
     editing = book;
-    const b = book || { status: "lu", ...draft };
+    const b = book || { ...draft };
     $("#book-h").textContent = book ? "Fiche du livre" : "Nouveau livre";
     $("#f-title").value = b.title || "";
     $("#f-author").value = b.author || "";
@@ -726,7 +692,6 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
     $("#f-genres").value = (b.genres || []).join(", ");
     $("#f-cover").value = b.cover_url || "";
     $("#f-summary").value = b.summary || "";
-    $("#f-status").value = b.status || "lu";
     $("#f-finished").value = b.finished_at || (book ? "" : new Date().toISOString().slice(0, 10));
     $("#f-review").value = b.review || "";
     $("#book-form").dataset.source = b.source || "manuel";
@@ -749,7 +714,7 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
       genres: $("#f-genres").value.split(",").map((s) => s.trim()).filter(Boolean),
       cover_url: $("#f-cover").value.trim() || null,
       summary: $("#f-summary").value.trim() || null,
-      status: $("#f-status").value,
+      status: "lu",
       finished_at: $("#f-finished").value || null,
       rating: intOrNull($("#f-rating").value),
       review: $("#f-review").value.trim() || null,
