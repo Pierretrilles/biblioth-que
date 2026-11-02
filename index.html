@@ -239,6 +239,7 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
           <button type="button" data-v="country">Pays</button>
           <button type="button" data-v="author">Auteur</button>
           <button type="button" data-v="publisher">Éditeur</button>
+          <button type="button" data-v="rating">Note</button>
           <button type="button" data-v="todo">À compléter</button>
         </div>
       </div>
@@ -353,7 +354,7 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
   // Préférences d'affichage, gardées sur cet appareil.
   const pref = (k, d) => { try { return localStorage.getItem("biblio." + k) || d; } catch { return d; } };
   const savePref = (k, v) => { try { localStorage.setItem("biblio." + k, v); } catch {} };
-  const GROUPS = ["genre", "country", "author", "publisher", "todo"];
+  const GROUPS = ["genre", "country", "author", "publisher", "rating", "todo"];
   let filter = { q: "", sort: pref("sort", "added"), group: pref("group", "genre"), layout: pref("layout", "rows") };
   if (!GROUPS.includes(filter.group)) filter.group = "genre";
   if (filter.sort === "recent") filter.sort = "added";
@@ -433,12 +434,13 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
 
   // ---------- affichage ----------
   // Catégories : un livre à plusieurs genres compte dans chacun d'eux.
-  const MISSING = { genre: "Sans genre", country: "Pays non renseigné", author: "Auteur inconnu", publisher: "Éditeur inconnu", todo: "Fiches complètes" };
+  const MISSING = { genre: "Sans genre", country: "Pays non renseigné", author: "Auteur inconnu", publisher: "Éditeur inconnu", rating: "Sans note", todo: "Fiches complètes" };
   const keysOf = (b, g) => ({
     genre: b.genres?.length ? b.genres : [MISSING.genre],
     country: [b.country || MISSING.country],
     author: b.author ? b.author.split(/\s+et\s+|,\s*/).map((s) => s.replace(/\s*\(dir\.\)$/, "")) : [MISSING.author],
     publisher: [b.publisher ? b.publisher.replace(/\s*\(.*\)$/, "") : MISSING.publisher],
+    rating: [b.rating ? `${b.rating} étoile${b.rating > 1 ? "s" : ""}` : MISSING.rating],
     todo: gaps(b).length ? gaps(b) : [MISSING.todo],
   }[g]);
   // « À compléter » : un livre figure dans chaque rubrique qui lui manque.
@@ -456,6 +458,7 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
     }
     const missing = (c) => c.label === MISSING[g];
     return [...m.values()].sort((a, b) => missing(a) - missing(b) ||
+      (g === "rating" ? b.label.localeCompare(a.label) : 0) ||
       b.items.length - a.items.length || a.label.localeCompare(b.label, "fr"));
   }
 
