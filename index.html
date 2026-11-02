@@ -179,15 +179,8 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
 .grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; min-width: 0; }
 .grid label { display: flex; flex-direction: column; gap: 4px; font: 500 .7rem/1.3 var(--mono); text-transform: uppercase; letter-spacing: .07em; color: var(--muted); min-width: 0; }
 .grid label > * { font: 15px/1.4 var(--body); text-transform: none; letter-spacing: 0; color: var(--ink); }
-.rating-field { display: flex; flex-direction: column; gap: 4px; font: 500 .7rem/1.3 var(--mono); text-transform: uppercase; letter-spacing: .07em; color: var(--muted); min-width: 0; }
-.rating { flex-wrap: wrap; min-height: 42px; touch-action: manipulation; }
-.rating-field .rating button[data-n]:not(.clear) { font: 400 1.6rem/1 var(--body); padding: 4px 3px; text-transform: none; }
 .grid textarea { resize: vertical; min-height: 84px; }
 .c6 { grid-column: span 6; } .c4 { grid-column: span 4; } .c3 { grid-column: span 3; } .c2 { grid-column: span 2; }
-.rating { display: flex; gap: 2px; align-items: center; }
-.rating button { border: 0; background: none; font-size: 1.4rem; line-height: 1; cursor: pointer; color: var(--line); padding: 2px; }
-.rating button.on { color: var(--accent); }
-.rating .clear { font: 400 .8rem var(--body); color: var(--muted); margin-left: 8px; }
 .confirm { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: .9rem; }
 
 .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(20px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--paper); padding: 10px 16px; border-radius: 8px; font-size: .9rem; z-index: 50; max-width: calc(100vw - 32px); }
@@ -343,11 +336,16 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
             </select>
           </label>
           <label class="c2 half">Terminé le<input class="field" id="f-finished" type="date"></label>
-          <div class="c2 half rating-field"><span id="f-rating-lbl">Ma note</span>
-            <div class="rating" id="f-rating" role="group" aria-labelledby="f-rating-lbl">
-              <button type="button" data-n="1" aria-label="1 sur 5">★</button><button type="button" data-n="2" aria-label="2 sur 5">★</button><button type="button" data-n="3" aria-label="3 sur 5">★</button><button type="button" data-n="4" aria-label="4 sur 5">★</button><button type="button" data-n="5" aria-label="5 sur 5">★</button>
-              <button type="button" class="clear" data-n="0">effacer</button>
-            </div>
+          <label class="c2 half">Ma note
+            <select class="field" id="f-rating">
+              <option value="">Pas de note</option>
+              <option value="5">5 ★★★★★</option>
+              <option value="4">4 ★★★★</option>
+              <option value="3">3 ★★★</option>
+              <option value="2">2 ★★</option>
+              <option value="1">1 ★</option>
+            </select>
+          </label>
           </div>
           <label class="c6">Mon avis<textarea class="field" id="f-review" placeholder="Ce que j'en ai pensé, une citation, à qui le conseiller…"></textarea></label>
         </div>
@@ -381,7 +379,6 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
   const savePref = (k, v) => { try { localStorage.setItem("biblio." + k, v); } catch {} };
   let filter = { q: "", status: "", sort: pref("sort", "added"), group: pref("group", "genre"), layout: pref("layout", "rows") };
   let editing = null;        // livre en cours d'édition (null = nouveau)
-  let rating = 0;
 
   // ---------- utilitaires ----------
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -699,19 +696,6 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
   });
 
   // ---------- fiche ----------
-  // Les boutons restent en place : on change seulement leur état (Safari perd le clic si on les recrée).
-  function renderRating() {
-    for (const b of $("#f-rating").querySelectorAll("button")) {
-      const n = +b.dataset.n;
-      if (n) { b.classList.toggle("on", n <= rating); b.setAttribute("aria-pressed", String(n === rating)); }
-      else b.hidden = !rating;
-    }
-  }
-  $("#f-rating").addEventListener("click", (e) => {
-    const b = e.target.closest("button"); if (!b) return;
-    e.preventDefault();
-    rating = +b.dataset.n; renderRating();
-  });
 
   function previewCover() {
     const b = { title: $("#f-title").value, author: $("#f-author").value, cover_url: $("#f-cover").value.trim() };
@@ -746,7 +730,7 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
     $("#f-finished").value = b.finished_at || (book ? "" : new Date().toISOString().slice(0, 10));
     $("#f-review").value = b.review || "";
     $("#book-form").dataset.source = b.source || "manuel";
-    rating = b.rating || 0; renderRating(); previewCover();
+    $("#f-rating").value = b.rating || ""; previewCover();
     resetDelete();
     $("#del-zone").hidden = !book;
     $("#dlg-book").showModal();
@@ -767,7 +751,7 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
       summary: $("#f-summary").value.trim() || null,
       status: $("#f-status").value,
       finished_at: $("#f-finished").value || null,
-      rating: rating || null,
+      rating: intOrNull($("#f-rating").value),
       review: $("#f-review").value.trim() || null,
     };
     $("#save").disabled = true;
