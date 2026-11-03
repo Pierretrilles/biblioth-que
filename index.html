@@ -177,6 +177,10 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
 .grid textarea { resize: vertical; min-height: 84px; }
 .c6 { grid-column: span 6; } .c4 { grid-column: span 4; } .c3 { grid-column: span 3; } .c2 { grid-column: span 2; }
 .confirm { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: .9rem; }
+dialog.small { width: min(520px, calc(100vw - 24px)); }
+#share-text { resize: vertical; font: 14px/1.45 var(--body); }
+.share-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
+.share-grid .btn { text-align: left; }
 
 .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(20px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--paper); padding: 10px 16px; border-radius: 8px; font-size: .9rem; z-index: 50; max-width: calc(100vw - 32px); }
 
@@ -330,8 +334,9 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
       </div>
     </div>
     <div class="dlg-foot">
-      <div class="confirm" id="del-zone">
-        <button class="btn danger" type="button" id="del">Supprimer</button>
+      <div class="confirm">
+        <button class="btn" type="button" id="share">Envoyer…</button>
+        <span class="confirm" id="del-zone"><button class="btn danger" type="button" id="del">Supprimer</button></span>
       </div>
       <div class="right">
         <button class="btn" type="button" data-close>Annuler</button>
@@ -339,6 +344,26 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
       </div>
     </div>
   </form>
+</dialog>
+
+<!-- Envoi de la fiche à un contact -->
+<dialog id="dlg-share" class="small">
+  <div class="dlg">
+    <div class="dlg-head"><h2>Envoyer la fiche</h2><button class="x" type="button" data-close aria-label="Fermer">×</button></div>
+    <div class="dlg-body">
+      <label class="note" for="share-text">Message (modifiable avant l'envoi)</label>
+      <textarea class="field" id="share-text" rows="9"></textarea>
+      <div class="share-grid" id="share-ways">
+        <button class="btn" type="button" data-way="mail">✉️ Courriel</button>
+        <button class="btn" type="button" data-way="whatsapp">💬 WhatsApp</button>
+        <button class="btn" type="button" data-way="sms">📱 SMS / iMessage</button>
+        <button class="btn" type="button" data-way="telegram">✈️ Telegram</button>
+        <button class="btn" type="button" data-way="copy">📋 Copier le texte</button>
+        <button class="btn" type="button" data-way="native" hidden>⋯ Autres applications</button>
+      </div>
+      <p class="note">« Copier le texte » permet de le coller dans n'importe quelle messagerie (Signal, Messenger…).</p>
+    </div>
+  </div>
 </dialog>
 
 <div class="toast" id="toast" hidden></div>
@@ -780,6 +805,44 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
     $("#dlg-book").close();
     toast(editing ? "Fiche mise à jour" : "Livre ajouté");
     load();
+  });
+
+  // ---------- envoi de la fiche ----------
+  // Le texte part des champs affichés, donc une modification non enregistrée est aussi envoyée.
+  function shareText() {
+    const v = (id) => $(id).value.trim();
+    const rating = intOrNull(v("#f-rating"));
+    const pages = v("#f-pages");
+    return [
+      `📖 ${v("#f-title")}${v("#f-author") ? " — " + v("#f-author") : ""}`,
+      [v("#f-year"), v("#f-publisher"), pages && `${pages} pages`].filter(Boolean).join(" · "),
+      [v("#f-country"), v("#f-genres")].filter(Boolean).join(" · "),
+      v("#f-isbn") && `ISBN ${v("#f-isbn")}`,
+      rating && `Ma note : ${stars(rating)}`,
+      v("#f-summary") && `\nRésumé : ${v("#f-summary")}`,
+      v("#f-review") && `\nMon avis : ${v("#f-review")}`,
+      v("#f-cover") && `\nCouverture : ${v("#f-cover")}`,
+    ].filter(Boolean).join("\n");
+  }
+  $("#share").addEventListener("click", () => {
+    $("#share-text").value = shareText();
+    $("[data-way=native]").hidden = !navigator.share;
+    $("#dlg-share").showModal();
+  });
+  $("#share-ways").addEventListener("click", async (e) => {
+    const way = e.target.closest("[data-way]")?.dataset.way; if (!way) return;
+    const text = $("#share-text").value, subject = `Un livre pour toi : ${$("#f-title").value.trim()}`;
+    const enc = encodeURIComponent;
+    const open = (url) => { window.location.href = url; };
+    if (way === "mail") open(`mailto:?subject=${enc(subject)}&body=${enc(text)}`);
+    else if (way === "whatsapp") window.open(`https://wa.me/?text=${enc(text)}`, "_blank", "noopener");
+    else if (way === "sms") open(`sms:?&body=${enc(text)}`);
+    else if (way === "telegram") window.open(`https://t.me/share/url?url=${enc(text)}`, "_blank", "noopener");
+    else if (way === "native") { try { await navigator.share({ title: subject, text }); } catch {} }
+    else if (way === "copy") {
+      try { await navigator.clipboard.writeText(text); toast("Texte copié : collez-le dans votre messagerie"); }
+      catch { $("#share-text").select(); toast("Sélectionné : faites Cmd+C (ou Ctrl+C) pour copier"); }
+    }
   });
 
   function resetDelete() { $("#del-zone").innerHTML = `<button class="btn danger" type="button" id="del">Supprimer</button>`; }
