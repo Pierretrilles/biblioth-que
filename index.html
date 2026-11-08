@@ -186,6 +186,8 @@ dialog.small { width: min(520px, calc(100vw - 24px)); }
 .cands .cand { width: 72px; aspect-ratio: 2/3; padding: 0; border: 2px solid var(--line); border-radius: 3px; overflow: hidden; background: var(--line); cursor: pointer; }
 .cands .cand:hover, .cands .cand:focus-visible { border-color: var(--accent); }
 .cands .cand img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cover-side { display: flex; flex-direction: column; gap: 10px; align-self: start; }
+.cover-side .btn { padding: 7px 8px; font-size: .85rem; }
 .cover-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .cover-tools .field { flex: 1; min-width: 180px; }
 /* Consultation seule (lien ?lecture=…) : on masque tout ce qui modifie. */
@@ -199,7 +201,7 @@ body.readonly #book-form .field { background: transparent; }
 
 @media (max-width: 620px) {
   .form { grid-template-columns: 1fr; }
-  .form .cover { width: 120px; }
+  .form .cover-side { width: 120px; }
   .c4, .c3, .c2 { grid-column: span 6; }
   .grid .half { grid-column: span 3; }
   .shelf { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 22px 14px; }
@@ -326,7 +328,10 @@ body.readonly #book-form .field { background: transparent; }
     <div class="dlg-head"><h2 id="book-h">Fiche du livre</h2><button class="x" type="button" data-close aria-label="Fermer">×</button></div>
     <div class="dlg-body">
       <div class="form">
-        <div class="cover" id="f-cover-preview"></div>
+        <div class="cover-side">
+          <div class="cover" id="f-cover-preview"></div>
+          <button class="btn owner-only" type="button" id="change-cover">🔎 Changer d'image</button>
+        </div>
         <div class="grid">
           <label class="c6">Titre<input class="field" id="f-title" required></label>
           <label class="c4">Auteur<input class="field" id="f-author"></label>
@@ -843,8 +848,29 @@ body.readonly #book-form .field { background: transparent; }
     return uniq.filter((_, i) => ok[i]).slice(0, 12);
   }
 
+  // Une ligne de la fenêtre « couvertures » : un livre de la liste, ou la fiche ouverte (data-id="form").
+  const formBook = () => ({ title: $("#f-title").value.trim(), author: $("#f-author").value.trim(), isbn: $("#f-isbn").value.trim(), year: $("#f-year").value, publisher: $("#f-publisher").value.trim() });
+  const rowBook = (row) => row.dataset.id === "form" ? formBook() : books.find((x) => x.id === row.dataset.id);
+  function coverRowHTML(b, id) {
+    const q = [b.title, b.author].filter(Boolean).join(" ");
+    return `
+      <div class="cover-row" data-id="${esc(id)}">
+        <div><b>${esc(b.title)}</b> <span class="r-s">${esc([b.author, b.year, b.publisher].filter(Boolean).join(" · "))}</span></div>
+        <div class="cands"><span class="note">En attente…</span></div>
+        <div class="cover-tools">
+          <input class="field" data-role="q" value="${esc(q)}" aria-label="Autre recherche">
+          <button class="btn" type="button" data-act="search">Chercher</button>
+          <a class="link" target="_blank" rel="noopener" href="https://www.google.com/search?tbm=isch&q=${encodeURIComponent(q + " livre couverture")}">Google Images ↗</a>
+        </div>
+        <div class="cover-tools">
+          <input class="field" data-role="url" type="url" placeholder="…ou collez l'adresse d'une image" aria-label="Adresse d'une image">
+          <button class="btn" type="button" data-act="paste">${id === "form" ? "Utiliser" : "Enregistrer"}</button>
+        </div>
+      </div>`;
+  }
+
   async function fillRow(row, custom) {
-    const b = books.find((x) => x.id === row.dataset.id); if (!b) return;
+    const b = rowBook(row); if (!b) return;
     const box = row.querySelector(".cands");
     box.innerHTML = `<span class="note">Recherche…</span>`;
     const found = await coverCandidates(b, custom);
@@ -858,23 +884,7 @@ body.readonly #book-form .field { background: transparent; }
     const todo = books.filter((b) => !b.cover_url);
     const run = ++coverRun;
     $("#covers-msg").textContent = `${todo.length} livre${todo.length > 1 ? "s" : ""} sans couverture. Cliquez sur la bonne image pour l'enregistrer.`;
-    $("#cover-rows").innerHTML = todo.map((b) => {
-      const q = [b.title, b.author].filter(Boolean).join(" ");
-      return `
-      <div class="cover-row" data-id="${b.id}">
-        <div><b>${esc(b.title)}</b> <span class="r-s">${esc([b.author, b.year, b.publisher].filter(Boolean).join(" · "))}</span></div>
-        <div class="cands"><span class="note">En attente…</span></div>
-        <div class="cover-tools">
-          <input class="field" data-role="q" value="${esc(q)}" aria-label="Autre recherche">
-          <button class="btn" type="button" data-act="search">Chercher</button>
-          <a class="link" target="_blank" rel="noopener" href="https://www.google.com/search?tbm=isch&q=${encodeURIComponent(q + " livre couverture")}">Google Images ↗</a>
-        </div>
-        <div class="cover-tools">
-          <input class="field" data-role="url" type="url" placeholder="…ou collez l'adresse d'une image" aria-label="Adresse d'une image">
-          <button class="btn" type="button" data-act="paste">Enregistrer</button>
-        </div>
-      </div>`;
-    }).join("");
+    $("#cover-rows").innerHTML = todo.map((b) => coverRowHTML(b, b.id)).join("");
     $("#dlg-covers").showModal();
     for (const row of $("#cover-rows").children) {
       if (run !== coverRun || !$("#dlg-covers").open) return;   // fenêtre fermée : on arrête
@@ -882,7 +892,23 @@ body.readonly #book-form .field { background: transparent; }
     }
   });
 
+  // Depuis la fiche : l'image choisie remplit le champ, et la fiche s'enregistre comme d'habitude.
+  $("#change-cover").addEventListener("click", () => {
+    if (!$("#f-title").value.trim()) { toast("Indiquez d'abord le titre du livre"); return; }
+    coverRun++;
+    $("#covers-msg").textContent = "Cliquez sur la bonne image, puis enregistrez la fiche.";
+    $("#cover-rows").innerHTML = coverRowHTML(formBook(), "form");
+    $("#dlg-covers").showModal();
+    fillRow($("#cover-rows").firstElementChild);
+  });
+
   async function saveCover(row, url) {
+    if (row.dataset.id === "form") {
+      $("#f-cover").value = url; previewCover();
+      $("#dlg-covers").close();
+      toast("Nouvelle image : cliquez sur « Enregistrer » pour la garder");
+      return;
+    }
     const { error } = await sb.from("books").update({ cover_url: url }).eq("id", row.dataset.id);
     if (error) { toast("Enregistrement impossible : " + error.message); return; }
     const b = books.find((x) => x.id === row.dataset.id); if (b) b.cover_url = url;
