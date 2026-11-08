@@ -186,6 +186,8 @@ dialog.small { width: min(520px, calc(100vw - 24px)); }
 .cands .cand { width: 72px; aspect-ratio: 2/3; padding: 0; border: 2px solid var(--line); border-radius: 3px; overflow: hidden; background: var(--line); cursor: pointer; }
 .cands .cand:hover, .cands .cand:focus-visible { border-color: var(--accent); }
 .cands .cand img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cover-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.cover-tools .field { flex: 1; min-width: 180px; }
 /* Consultation seule (lien ?lecture=…) : on masque tout ce qui modifie. */
 body:not(.readonly) .viewer-only, body.readonly .owner-only { display: none !important; }
 body.readonly #book-form .field { background: transparent; }
@@ -699,10 +701,10 @@ body.readonly #book-form .field { background: transparent; }
   }
 
   // Catalogue de la Bibliothèque nationale de France (SRU, notices Dublin Core).
-  async function searchBnF(q, isbn) {
+  async function searchBnF(q, isbn, rawCql) {
     try {
       const words = q.replace(/["\\]/g, " ").trim();
-      const cql = isbn ? `bib.isbn all "${isbn}"` : `bib.anywhere all "${words}"`;
+      const cql = rawCql || (isbn ? `bib.isbn all "${isbn}"` : `bib.anywhere all "${words}"`);
       const url = "https://catalogue.bnf.fr/api/SRU?version=1.2&operation=searchRetrieve&recordSchema=dublincore&maximumRecords=12&query=" + encodeURIComponent(cql);
       const r = await fetch(url); if (!r.ok) return [];
       const xml = new DOMParser().parseFromString(await r.text(), "text/xml");
@@ -801,45 +803,111 @@ body.readonly #book-form .field { background: transparent; }
   });
 
   // ---------- couvertures manquantes ----------
-  // Pour chaque livre sans couverture : jusqu'à 5 images trouvées (ISBN, BnF, Open Library, Google Books),
-  // que l'on choisit d'un clic. On cherche un livre après l'autre pour ménager les catalogues.
-  async function coverCandidates(b) {
+  // Pour chaque livre sans couverture : jusqu'à 12 images, que l'on choisit d'un clic.
+  // Sources : l'ISBN du livre, Google Books (titre + auteur), toutes les éditions Open Library de l'œuvre,
+  // et les ISBN des éditions françaises trouvées à la BnF. Les résultats d'un autre titre sont écartés.
+  // On cherche un livre après l'autre pour ménager les catalogues.
+  const mainTitle = (t) => norm(t).split(/\s[:(.]|[:(]/)[0].replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+  const sameTitle = (a, b) => { const x = mainTitle(a), y = mainTitle(b); return !!x && !!y && (x.includes(y) || y.includes(x)); };
+  const getJSON = async (url) => { try { const r = await fetch(url); return r.ok ? await r.json() : null; } catch { return null; } };
+  const olCover = (id) => `https://covers.openlibrary.org/b/id/${id}-L.jpg`;
+  const olIsbn = (isbn) => `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg?default=false`;
+
+  async function coverCandidates(b, custom) {
     const isbn = (b.isbn || "").replace(/[-\s]/g, "");
-    const q = [b.title, b.author].filter(Boolean).join(" ");
-    const lists = await Promise.all([searchBnF(q), searchOL(q), searchGB(q), isbn ? searchGB("", isbn) : []]);
-    const urls = [isbn && `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg?default=false`, ...lists.flat().map((x) => x.cover_url)];
-    const uniq = [...new Set(urls.filter(Boolean))].slice(0, 10);
+    const clean = (s) => String(s || "").replace(/["\\]/g, " ").trim();
+    const title = clean(b.title), author = clean((b.author || "").split(/,|\s+et\s+/)[0]);
+    const keep = (x) => custom || sameTitle(x.title, b.title);
+    const enc = encodeURIComponent;
+
+    const olq = custom ? `q=${enc(custom)}` : `title=${enc(title)}${author ? "&author=" + enc(author) : ""}`;
+    const [gIsbn, gTitle, olRes, bnf] = await Promise.all([
+      !custom && isbn ? searchGB("", isbn) : [],
+      searchGB(custom || `intitle:"${title}"${author ? ` inauthor:"${author}"` : ""}`),
+      getJSON(`https://openlibrary.org/search.json?${olq}&limit=10&fields=key,title,cover_i`),
+      searchBnF(custom || title, null, custom ? null : `bib.title all "${title}"${author ? ` and bib.author all "${author}"` : ""}`),
+    ]);
+    // Toutes les éditions des œuvres Open Library correspondantes (souvent des éditions françaises).
+    const works = (olRes?.docs || []).filter(keep).slice(0, 3);
+    const eds = await Promise.all(works.map((w) => getJSON(`https://openlibrary.org${w.key}/editions.json?limit=50`)));
+    const urls = [
+      !custom && isbn && olIsbn(isbn),
+      ...gIsbn.map((x) => x.cover_url),
+      ...gTitle.filter(keep).map((x) => x.cover_url),
+      ...works.filter((w) => w.cover_i).map((w) => olCover(w.cover_i)),
+      ...eds.flatMap((e) => (e?.entries || []).flatMap((x) => (x.covers || []).filter((id) => id > 0).map(olCover))),
+      ...bnf.filter(keep).map((x) => x.cover_url),
+    ];
+    const uniq = [...new Set(urls.filter(Boolean))].slice(0, 30);
     const ok = await Promise.all(uniq.map(imageLoads));
-    return uniq.filter((_, i) => ok[i]).slice(0, 5);
+    return uniq.filter((_, i) => ok[i]).slice(0, 12);
   }
+
+  async function fillRow(row, custom) {
+    const b = books.find((x) => x.id === row.dataset.id); if (!b) return;
+    const box = row.querySelector(".cands");
+    box.innerHTML = `<span class="note">Recherche…</span>`;
+    const found = await coverCandidates(b, custom);
+    box.innerHTML = found.length
+      ? found.map((u) => `<button class="cand" type="button" data-url="${esc(u)}" title="Choisir cette couverture"><img src="${esc(u)}" alt="" referrerpolicy="no-referrer"></button>`).join("")
+      : `<span class="note">Aucune couverture trouvée. Essayez une autre recherche ou Google Images ci-dessous.</span>`;
+  }
+
   let coverRun = 0;
   $("#find-covers").addEventListener("click", async () => {
     const todo = books.filter((b) => !b.cover_url);
     const run = ++coverRun;
     $("#covers-msg").textContent = `${todo.length} livre${todo.length > 1 ? "s" : ""} sans couverture. Cliquez sur la bonne image pour l'enregistrer.`;
-    $("#cover-rows").innerHTML = todo.map((b) => `
+    $("#cover-rows").innerHTML = todo.map((b) => {
+      const q = [b.title, b.author].filter(Boolean).join(" ");
+      return `
       <div class="cover-row" data-id="${b.id}">
-        <div><b>${esc(b.title)}</b> <span class="r-s">${esc([b.author, b.year].filter(Boolean).join(" · "))}</span></div>
+        <div><b>${esc(b.title)}</b> <span class="r-s">${esc([b.author, b.year, b.publisher].filter(Boolean).join(" · "))}</span></div>
         <div class="cands"><span class="note">En attente…</span></div>
-      </div>`).join("");
+        <div class="cover-tools">
+          <input class="field" data-role="q" value="${esc(q)}" aria-label="Autre recherche">
+          <button class="btn" type="button" data-act="search">Chercher</button>
+          <a class="link" target="_blank" rel="noopener" href="https://www.google.com/search?tbm=isch&q=${encodeURIComponent(q + " livre couverture")}">Google Images ↗</a>
+        </div>
+        <div class="cover-tools">
+          <input class="field" data-role="url" type="url" placeholder="…ou collez l'adresse d'une image" aria-label="Adresse d'une image">
+          <button class="btn" type="button" data-act="paste">Enregistrer</button>
+        </div>
+      </div>`;
+    }).join("");
     $("#dlg-covers").showModal();
-    for (const b of todo) {
+    for (const row of $("#cover-rows").children) {
       if (run !== coverRun || !$("#dlg-covers").open) return;   // fenêtre fermée : on arrête
-      const box = $(`#cover-rows [data-id="${b.id}"] .cands`);
-      box.innerHTML = `<span class="note">Recherche…</span>`;
-      const found = await coverCandidates(b);
-      box.innerHTML = found.length
-        ? found.map((u) => `<button class="cand" type="button" data-url="${esc(u)}" title="Choisir cette couverture"><img src="${esc(u)}" alt="" referrerpolicy="no-referrer"></button>`).join("")
-        : `<span class="note">Aucune couverture trouvée. Vous pouvez coller l'adresse d'une image dans la fiche.</span>`;
+      await fillRow(row);
     }
   });
-  $("#cover-rows").addEventListener("click", async (e) => {
-    const c = e.target.closest(".cand"); if (!c) return;
-    const row = c.closest(".cover-row"), url = c.dataset.url;
+
+  async function saveCover(row, url) {
     const { error } = await sb.from("books").update({ cover_url: url }).eq("id", row.dataset.id);
     if (error) { toast("Enregistrement impossible : " + error.message); return; }
     const b = books.find((x) => x.id === row.dataset.id); if (b) b.cover_url = url;
-    row.querySelector(".cands").innerHTML = `<button class="cand" type="button" disabled><img src="${esc(url)}" alt=""></button><span class="note">✓ Couverture enregistrée</span>`;
+    row.querySelector(".cands").innerHTML = `<button class="cand" type="button" disabled><img src="${esc(url)}" alt="" referrerpolicy="no-referrer"></button><span class="note">✓ Couverture enregistrée</span>`;
+  }
+  $("#cover-rows").addEventListener("click", async (e) => {
+    const row = e.target.closest(".cover-row"); if (!row) return;
+    const c = e.target.closest(".cand:not([disabled])");
+    const act = e.target.closest("[data-act]")?.dataset.act;
+    if (c) saveCover(row, c.dataset.url);
+    else if (act === "search") {
+      const q = row.querySelector("[data-role=q]").value.trim();
+      if (q) fillRow(row, q);
+    } else if (act === "paste") {
+      const url = row.querySelector("[data-role=url]").value.trim();
+      if (!/^https?:\/\//.test(url)) { toast("Collez une adresse qui commence par http"); return; }
+      if (!(await imageLoads(url))) { toast("Cette adresse n'affiche pas d'image. Sur Google Images, ouvrez l'image puis « Copier l'adresse de l'image »."); return; }
+      saveCover(row, url);
+    }
+  });
+  $("#cover-rows").addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    const role = e.target.dataset?.role; if (!role) return;
+    e.preventDefault();
+    e.target.closest(".cover-row").querySelector(`[data-act=${role === "q" ? "search" : "paste"}]`).click();
   });
   $("#dlg-covers").addEventListener("close", () => { coverRun++; render(); });
 
