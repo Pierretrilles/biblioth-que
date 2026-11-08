@@ -178,6 +178,9 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
 .c6 { grid-column: span 6; } .c4 { grid-column: span 4; } .c3 { grid-column: span 3; } .c2 { grid-column: span 2; }
 .confirm { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: .9rem; }
 dialog.small { width: min(520px, calc(100vw - 24px)); }
+/* Consultation seule (lien ?lecture=…) : on masque tout ce qui modifie. */
+body:not(.readonly) .viewer-only, body.readonly .owner-only { display: none !important; }
+body.readonly #book-form .field { background: transparent; }
 #share-text { resize: vertical; font: 14px/1.45 var(--body); }
 .share-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
 .share-grid .btn { text-align: left; }
@@ -222,7 +225,8 @@ dialog.small { width: min(520px, calc(100vw - 24px)); }
   <header class="top">
     <div class="wrap">
       <h1>Carnet de lectures</h1>
-      <div class="who"><span id="who-email"></span><button id="logout" type="button">Se déconnecter</button></div>
+      <div class="who owner-only"><span id="who-email"></span><button id="share-site" type="button">Partager en consultation</button><button id="logout" type="button">Se déconnecter</button></div>
+      <div class="who viewer-only">Consultation seule</div>
     </div>
     <div class="wrap stats" id="stats"></div>
   </header>
@@ -230,9 +234,9 @@ dialog.small { width: min(520px, calc(100vw - 24px)); }
   <main class="wrap">
     <div class="toolbar">
       <input type="search" id="q" placeholder="Chercher un titre, un auteur, un éditeur…" aria-label="Chercher dans ma bibliothèque">
-      <button class="btn primary" id="add" type="button">+ Ajouter un livre</button>
+      <button class="btn primary owner-only" id="add" type="button">+ Ajouter un livre</button>
     </div>
-    <div class="note" id="loading">Chargement de vos livres…</div>
+    <div class="note" id="loading">Chargement des livres…</div>
 
     <!-- Accueil : les livres regroupés par catégorie -->
     <section id="home" hidden>
@@ -240,11 +244,11 @@ dialog.small { width: min(520px, calc(100vw - 24px)); }
         <span class="lbl">Classer par</span>
         <div class="seg wrapping" id="group" role="group" aria-label="Classer par">
           <button type="button" data-v="genre">Genre</button>
-          <button type="button" data-v="country">Pays</button>
-          <button type="button" data-v="author">Auteur</button>
-          <button type="button" data-v="publisher">Éditeur</button>
+          <button type="button" data-v="country" class="owner-only">Pays</button>
+          <button type="button" data-v="author" class="owner-only">Auteur</button>
+          <button type="button" data-v="publisher" class="owner-only">Éditeur</button>
           <button type="button" data-v="rating">Note</button>
-          <button type="button" data-v="todo">À compléter</button>
+          <button type="button" data-v="todo" class="owner-only">À compléter</button>
         </div>
       </div>
       <div class="cats" id="cats"></div>
@@ -276,9 +280,15 @@ dialog.small { width: min(520px, calc(100vw - 24px)); }
     </section>
 
     <div class="empty" id="empty" hidden>
-      <h2>Votre bibliothèque est vide</h2>
-      <p>Cliquez sur « Ajouter un livre », tapez un titre ou un ISBN, et la fiche se remplit avec la couverture, l'auteur, l'année et le résumé.</p>
-      <button class="btn primary" type="button" data-open-add>+ Ajouter mon premier livre</button>
+      <div class="owner-only">
+        <h2>Votre bibliothèque est vide</h2>
+        <p>Cliquez sur « Ajouter un livre », tapez un titre ou un ISBN, et la fiche se remplit avec la couverture, l'auteur, l'année et le résumé.</p>
+        <button class="btn primary" type="button" data-open-add>+ Ajouter mon premier livre</button>
+      </div>
+      <div class="viewer-only">
+        <h2>Aucun livre à afficher</h2>
+        <p>Ce lien de consultation a peut-être été désactivé. Demandez-en un nouveau à la personne qui vous l'a envoyé.</p>
+      </div>
     </div>
   </main>
 </div>
@@ -336,11 +346,11 @@ dialog.small { width: min(520px, calc(100vw - 24px)); }
     <div class="dlg-foot">
       <div class="confirm">
         <button class="btn" type="button" id="share">Envoyer…</button>
-        <span class="confirm" id="del-zone"><button class="btn danger" type="button" id="del">Supprimer</button></span>
+        <span class="confirm owner-only" id="del-zone"><button class="btn danger" type="button" id="del">Supprimer</button></span>
       </div>
       <div class="right">
-        <button class="btn" type="button" data-close>Annuler</button>
-        <button class="btn primary" type="submit" id="save">Enregistrer</button>
+        <button class="btn" type="button" data-close id="cancel">Annuler</button>
+        <button class="btn primary owner-only" type="submit" id="save">Enregistrer</button>
       </div>
     </div>
   </form>
@@ -366,6 +376,27 @@ dialog.small { width: min(520px, calc(100vw - 24px)); }
   </div>
 </dialog>
 
+<!-- Lien de consultation de toute la bibliothèque -->
+<dialog id="dlg-site" class="small">
+  <div class="dlg">
+    <div class="dlg-head"><h2>Partager en consultation</h2><button class="x" type="button" data-close aria-label="Fermer">×</button></div>
+    <div class="dlg-body">
+      <p class="note">La personne qui reçoit ce lien voit vos livres, vos notes et vos avis, sans compte. Elle ne peut rien ajouter, modifier ni supprimer.</p>
+      <input class="field" id="site-link" readonly aria-label="Lien de consultation">
+      <div class="share-grid" id="site-ways">
+        <button class="btn" type="button" data-way="copy">📋 Copier le lien</button>
+        <button class="btn" type="button" data-way="mail">✉️ Courriel</button>
+        <button class="btn" type="button" data-way="whatsapp">💬 WhatsApp</button>
+        <button class="btn" type="button" data-way="sms">📱 SMS / iMessage</button>
+        <button class="btn" type="button" data-way="telegram">✈️ Telegram</button>
+        <button class="btn" type="button" data-way="native" hidden>⋯ Autres applications</button>
+      </div>
+      <div class="confirm" id="revoke-zone"><button class="btn danger" type="button" id="revoke">Désactiver ce lien</button></div>
+      <p class="note">Désactiver le lien coupe l'accès à tous ceux qui l'ont reçu. Un nouveau lien sera créé la prochaine fois.</p>
+    </div>
+  </div>
+</dialog>
+
 <div class="toast" id="toast" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
@@ -381,7 +412,11 @@ dialog.small { width: min(520px, calc(100vw - 24px)); }
   const savePref = (k, v) => { try { localStorage.setItem("biblio." + k, v); } catch {} };
   const GROUPS = ["genre", "country", "author", "publisher", "rating", "todo"];
   let filter = { q: "", sort: pref("sort", "added"), group: pref("group", "genre"), layout: pref("layout", "rows") };
-  if (!GROUPS.includes(filter.group)) filter.group = "genre";
+  // Lien de consultation (?lecture=jeton) : lecture seule, classement par genre ou par note seulement.
+  const shareToken = new URLSearchParams(location.search).get("lecture");
+  const readonly = !!shareToken;
+  const VIEW_GROUPS = readonly ? ["genre", "rating"] : GROUPS;
+  if (!VIEW_GROUPS.includes(filter.group)) filter.group = "genre";
   if (filter.sort === "recent") filter.sort = "added";
   let editing = null;        // livre en cours d'édition (null = nouveau)
 
@@ -414,11 +449,15 @@ dialog.small { width: min(520px, calc(100vw - 24px)); }
     show("#gate-config");
     return;
   }
-  sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
+  // En consultation, le jeton voyage dans l'en-tête « x-lecture », que lit la vue shared_books.
+  sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey,
+    readonly ? { global: { headers: { "x-lecture": shareToken } }, auth: { persistSession: false } } : undefined);
   if (cfg.googleBooksKey) $("#gb-on").hidden = false;
 
+  if (readonly) { document.body.classList.add("readonly"); show("#app"); load(); }
+
   let authKnown = false;
-  sb.auth.onAuthStateChange((_evt, session) => {
+  if (!readonly) sb.auth.onAuthStateChange((_evt, session) => {
     const u = session?.user || null;
     if (authKnown && u?.id === user?.id) return;
     authKnown = true;
@@ -447,12 +486,12 @@ dialog.small { width: min(520px, calc(100vw - 24px)); }
       .subscribe();
   }
   function stopSync() { if (channel) { sb.removeChannel(channel); channel = null; } }
-  document.addEventListener("visibilitychange", () => { if (!document.hidden && user) load(); });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && (user || readonly)) load(); });
 
   async function load() {
-    const { data, error } = await sb.from("books").select("*").order("created_at", { ascending: false });
+    const { data, error } = await sb.from(readonly ? "shared_books" : "books").select("*").order("created_at", { ascending: false });
     $("#loading").hidden = true;
-    if (error) { toast("Impossible de charger les livres : " + error.message); return; }
+    if (error) { toast("Impossible de charger les livres : " + error.message); if (!readonly) return; }
     books = data || [];
     render();
   }
@@ -492,7 +531,7 @@ dialog.small { width: min(520px, calc(100vw - 24px)); }
     const h = decodeURIComponent(location.hash.slice(1));
     if (h === "tous") return { all: true };
     const i = h.indexOf("/");
-    if (i > 0 && GROUPS.includes(h.slice(0, i))) return { group: h.slice(0, i), cat: h.slice(i + 1) };
+    if (i > 0 && VIEW_GROUPS.includes(h.slice(0, i))) return { group: h.slice(0, i), cat: h.slice(i + 1) };
     return null;
   }
   window.addEventListener("hashchange", () => { window.scrollTo(0, 0); render(); });
@@ -773,6 +812,8 @@ dialog.small { width: min(520px, calc(100vw - 24px)); }
     $("#f-review").value = b.review || "";
     $("#book-form").dataset.source = b.source || "manuel";
     $("#f-rating").value = b.rating || ""; previewCover();
+    for (const el of $("#book-form").querySelectorAll(".field")) { el.readOnly = readonly; if (el.tagName === "SELECT") el.disabled = readonly; }
+    $("#cancel").textContent = readonly ? "Fermer" : "Annuler";
     resetDelete();
     $("#del-zone").hidden = !book;
     $("#dlg-book").showModal();
@@ -780,6 +821,7 @@ dialog.small { width: min(520px, calc(100vw - 24px)); }
 
   $("#book-form").addEventListener("submit", async (e) => {
     e.preventDefault();
+    if (readonly) return;
     const row = {
       title: $("#f-title").value.trim(),
       author: $("#f-author").value.trim() || null,
@@ -818,9 +860,9 @@ dialog.small { width: min(520px, calc(100vw - 24px)); }
       [v("#f-year"), v("#f-publisher"), pages && `${pages} pages`].filter(Boolean).join(" · "),
       [v("#f-country"), v("#f-genres")].filter(Boolean).join(" · "),
       v("#f-isbn") && `ISBN ${v("#f-isbn")}`,
-      rating && `Ma note : ${stars(rating)}`,
+      rating && `${readonly ? "Note" : "Ma note"} : ${stars(rating)}`,
       v("#f-summary") && `\nRésumé : ${v("#f-summary")}`,
-      v("#f-review") && `\nMon avis : ${v("#f-review")}`,
+      v("#f-review") && `\n${readonly ? "Avis" : "Mon avis"} : ${v("#f-review")}`,
       v("#f-cover") && `\nCouverture : ${v("#f-cover")}`,
     ].filter(Boolean).join("\n");
   }
@@ -829,9 +871,8 @@ dialog.small { width: min(520px, calc(100vw - 24px)); }
     $("[data-way=native]").hidden = !navigator.share;
     $("#dlg-share").showModal();
   });
-  $("#share-ways").addEventListener("click", async (e) => {
-    const way = e.target.closest("[data-way]")?.dataset.way; if (!way) return;
-    const text = $("#share-text").value, subject = `Un livre pour toi : ${$("#f-title").value.trim()}`;
+  // Ouvre la messagerie choisie avec le texte déjà rempli ; « field » sert de repli si la copie échoue.
+  async function sendVia(way, subject, text, field) {
     const enc = encodeURIComponent;
     const open = (url) => { window.location.href = url; };
     if (way === "mail") open(`mailto:?subject=${enc(subject)}&body=${enc(text)}`);
@@ -840,8 +881,48 @@ dialog.small { width: min(520px, calc(100vw - 24px)); }
     else if (way === "telegram") window.open(`https://t.me/share/url?url=${enc(text)}`, "_blank", "noopener");
     else if (way === "native") { try { await navigator.share({ title: subject, text }); } catch {} }
     else if (way === "copy") {
-      try { await navigator.clipboard.writeText(text); toast("Texte copié : collez-le dans votre messagerie"); }
-      catch { $("#share-text").select(); toast("Sélectionné : faites Cmd+C (ou Ctrl+C) pour copier"); }
+      try { await navigator.clipboard.writeText(text); toast("Copié : collez-le dans votre messagerie"); }
+      catch { field.select(); toast("Sélectionné : faites Cmd+C (ou Ctrl+C) pour copier"); }
+    }
+  }
+  $("#share-ways").addEventListener("click", (e) => {
+    const way = e.target.closest("[data-way]")?.dataset.way; if (!way) return;
+    sendVia(way, `Un livre pour toi : ${$("#f-title").value.trim()}`, $("#share-text").value, $("#share-text"));
+  });
+
+  // ---------- lien de consultation de toute la bibliothèque ----------
+  let siteToken = null;
+  const siteLink = () => location.origin + location.pathname + "?lecture=" + siteToken;
+  $("#share-site").addEventListener("click", async () => {
+    if (!siteToken) {
+      const { data } = await sb.from("shares").select("token").limit(1);
+      siteToken = data?.[0]?.token || null;
+    }
+    if (!siteToken) {
+      const { data, error } = await sb.from("shares").insert({}).select("token").single();
+      if (error) { toast("Création du lien impossible (migration-partage.sql a-t-elle été lancée ?) : " + error.message); return; }
+      siteToken = data.token;
+    }
+    $("#site-link").value = siteLink();
+    $("#site-ways [data-way=native]").hidden = !navigator.share;
+    resetRevoke();
+    $("#dlg-site").showModal();
+  });
+  $("#site-ways").addEventListener("click", (e) => {
+    const way = e.target.closest("[data-way]")?.dataset.way; if (!way) return;
+    const text = way === "copy" ? siteLink() : `Voici ma bibliothèque, à consulter ici : ${siteLink()}`;
+    sendVia(way, "Ma bibliothèque", text, $("#site-link"));
+  });
+  function resetRevoke() { $("#revoke-zone").innerHTML = `<button class="btn danger" type="button" id="revoke">Désactiver ce lien</button>`; }
+  $("#revoke-zone").addEventListener("click", async (e) => {
+    const t = e.target.closest("button"); if (!t) return;
+    if (t.id === "revoke") {
+      $("#revoke-zone").innerHTML = `<span>Couper l'accès à ce lien ?</span><button class="btn danger" type="button" id="revoke-yes">Oui, désactiver</button><button class="btn" type="button" id="revoke-no">Non</button>`;
+    } else if (t.id === "revoke-no") resetRevoke();
+    else if (t.id === "revoke-yes") {
+      const { error } = await sb.from("shares").delete().eq("user_id", user.id);
+      if (error) { toast("Désactivation impossible : " + error.message); return; }
+      siteToken = null; $("#dlg-site").close(); toast("Lien désactivé");
     }
   });
 
