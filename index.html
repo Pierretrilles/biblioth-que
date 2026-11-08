@@ -178,6 +178,14 @@ dialog::backdrop { background: rgb(10 20 16 / .55); }
 .c6 { grid-column: span 6; } .c4 { grid-column: span 4; } .c3 { grid-column: span 3; } .c2 { grid-column: span 2; }
 .confirm { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: .9rem; }
 dialog.small { width: min(520px, calc(100vw - 24px)); }
+#find-covers { align-self: flex-start; }
+.cover-rows { display: flex; flex-direction: column; gap: 14px; }
+.cover-row { display: flex; flex-direction: column; gap: 8px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.cover-row .r-s { color: var(--muted); font-size: .85rem; }
+.cands { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.cands .cand { width: 72px; aspect-ratio: 2/3; padding: 0; border: 2px solid var(--line); border-radius: 3px; overflow: hidden; background: var(--line); cursor: pointer; }
+.cands .cand:hover, .cands .cand:focus-visible { border-color: var(--accent); }
+.cands .cand img { width: 100%; height: 100%; object-fit: cover; display: block; }
 /* Consultation seule (lien ?lecture=…) : on masque tout ce qui modifie. */
 body:not(.readonly) .viewer-only, body.readonly .owner-only { display: none !important; }
 body.readonly #book-form .field { background: transparent; }
@@ -258,6 +266,7 @@ body.readonly #book-form .field { background: transparent; }
     <section id="list" hidden>
       <div class="list-head">
         <a class="link" href="#" id="back">← Toutes les catégories</a>
+        <button class="btn primary owner-only" type="button" id="find-covers" hidden>🔎 Trouver les couvertures en ligne</button>
         <h2><span id="list-title"></span> <small id="list-count"></small></h2>
       </div>
       <div class="toolbar">
@@ -373,6 +382,18 @@ body.readonly #book-form .field { background: transparent; }
       </div>
       <p class="note">« Copier le texte » permet de le coller dans n'importe quelle messagerie (Signal, Messenger…).</p>
     </div>
+  </div>
+</dialog>
+
+<!-- Recherche des couvertures manquantes -->
+<dialog id="dlg-covers">
+  <div class="dlg">
+    <div class="dlg-head"><h2>Couvertures manquantes</h2><button class="x" type="button" data-close aria-label="Fermer">×</button></div>
+    <div class="dlg-body">
+      <p class="note" id="covers-msg"></p>
+      <div class="cover-rows" id="cover-rows"></div>
+    </div>
+    <div class="dlg-foot"><span class="note">Rien n'est enregistré sans votre clic.</span><div class="right"><button class="btn" type="button" data-close>Fermer</button></div></div>
   </div>
 </dialog>
 
@@ -573,6 +594,7 @@ body.readonly #book-form .field { background: transparent; }
     }[filter.sort];
     list.sort(cmp);
 
+    $("#find-covers").hidden = !(r && r.group === "todo" && r.cat === "Sans couverture" && list.length);
     $("#list-title").textContent = title;
     $("#list-count").textContent = `${list.length} livre${list.length > 1 ? "s" : ""}`;
     $("#no-match").hidden = list.length > 0;
@@ -777,6 +799,49 @@ body.readonly #book-form .field { background: transparent; }
     $("#dlg-search").close();
     openBook(null, b);
   });
+
+  // ---------- couvertures manquantes ----------
+  // Pour chaque livre sans couverture : jusqu'à 5 images trouvées (ISBN, BnF, Open Library, Google Books),
+  // que l'on choisit d'un clic. On cherche un livre après l'autre pour ménager les catalogues.
+  async function coverCandidates(b) {
+    const isbn = (b.isbn || "").replace(/[-\s]/g, "");
+    const q = [b.title, b.author].filter(Boolean).join(" ");
+    const lists = await Promise.all([searchBnF(q), searchOL(q), searchGB(q), isbn ? searchGB("", isbn) : []]);
+    const urls = [isbn && `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg?default=false`, ...lists.flat().map((x) => x.cover_url)];
+    const uniq = [...new Set(urls.filter(Boolean))].slice(0, 10);
+    const ok = await Promise.all(uniq.map(imageLoads));
+    return uniq.filter((_, i) => ok[i]).slice(0, 5);
+  }
+  let coverRun = 0;
+  $("#find-covers").addEventListener("click", async () => {
+    const todo = books.filter((b) => !b.cover_url);
+    const run = ++coverRun;
+    $("#covers-msg").textContent = `${todo.length} livre${todo.length > 1 ? "s" : ""} sans couverture. Cliquez sur la bonne image pour l'enregistrer.`;
+    $("#cover-rows").innerHTML = todo.map((b) => `
+      <div class="cover-row" data-id="${b.id}">
+        <div><b>${esc(b.title)}</b> <span class="r-s">${esc([b.author, b.year].filter(Boolean).join(" · "))}</span></div>
+        <div class="cands"><span class="note">En attente…</span></div>
+      </div>`).join("");
+    $("#dlg-covers").showModal();
+    for (const b of todo) {
+      if (run !== coverRun || !$("#dlg-covers").open) return;   // fenêtre fermée : on arrête
+      const box = $(`#cover-rows [data-id="${b.id}"] .cands`);
+      box.innerHTML = `<span class="note">Recherche…</span>`;
+      const found = await coverCandidates(b);
+      box.innerHTML = found.length
+        ? found.map((u) => `<button class="cand" type="button" data-url="${esc(u)}" title="Choisir cette couverture"><img src="${esc(u)}" alt="" referrerpolicy="no-referrer"></button>`).join("")
+        : `<span class="note">Aucune couverture trouvée. Vous pouvez coller l'adresse d'une image dans la fiche.</span>`;
+    }
+  });
+  $("#cover-rows").addEventListener("click", async (e) => {
+    const c = e.target.closest(".cand"); if (!c) return;
+    const row = c.closest(".cover-row"), url = c.dataset.url;
+    const { error } = await sb.from("books").update({ cover_url: url }).eq("id", row.dataset.id);
+    if (error) { toast("Enregistrement impossible : " + error.message); return; }
+    const b = books.find((x) => x.id === row.dataset.id); if (b) b.cover_url = url;
+    row.querySelector(".cands").innerHTML = `<button class="cand" type="button" disabled><img src="${esc(url)}" alt=""></button><span class="note">✓ Couverture enregistrée</span>`;
+  });
+  $("#dlg-covers").addEventListener("close", () => { coverRun++; render(); });
 
   // ---------- fiche ----------
 
