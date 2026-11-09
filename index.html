@@ -108,16 +108,6 @@ label.inline select { font: .9rem var(--body); text-transform: none; letter-spac
 .list-head { display: flex; flex-direction: column; gap: 6px; }
 .list-head h2 { font: 400 clamp(1.4rem, 3vw, 1.9rem)/1.15 var(--display); margin: 0; text-wrap: balance; }
 .list-head h2 small { font: 500 .75rem/1 var(--mono); color: var(--muted); letter-spacing: .05em; }
-.rows { display: flex; flex-direction: column; border-top: 1px solid var(--line); margin-bottom: 48px; }
-.row { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto auto; gap: 14px; align-items: center; padding: 10px 4px; border: 0; border-bottom: 1px solid var(--line); background: none; text-align: left; cursor: pointer; width: 100%; }
-.row:hover { background: var(--card); }
-.row .cover { width: 40px; border-radius: 2px 3px 3px 2px; box-shadow: none; }
-.row .cover.gen { padding: 0; }
-.row .cover.gen span { display: none; }
-.row .title { font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
-.row .author { color: var(--muted); font-size: .88rem; }
-.row .yr { font: .85rem var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
-@media (max-width: 620px) { .row { grid-template-columns: 40px minmax(0, 1fr) auto; } .row .yr { display: none; } }
 
 /* Rayonnage */
 .shelf { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 28px 20px; padding-block: 4px 48px; }
@@ -283,10 +273,6 @@ body.readonly #book-form .field { background: transparent; }
             <option value="rating">Note</option>
           </select>
         </label>
-        <div class="seg" id="layout" role="group" aria-label="Affichage">
-          <button type="button" data-v="rows">Liste</button>
-          <button type="button" data-v="covers">Couvertures</button>
-        </div>
       </div>
       <div id="books"></div>
       <div class="note" id="no-match" hidden>Aucun livre ne correspond.</div>
@@ -440,7 +426,7 @@ body.readonly #book-form .field { background: transparent; }
   const pref = (k, d) => { try { return localStorage.getItem("biblio." + k) || d; } catch { return d; } };
   const savePref = (k, v) => { try { localStorage.setItem("biblio." + k, v); } catch {} };
   const GROUPS = ["genre", "country", "author", "publisher", "rating", "todo"];
-  let filter = { q: "", sort: pref("sort", "added"), group: pref("group", "genre"), layout: pref("layout", "rows") };
+  let filter = { q: "", sort: pref("sort", "added"), group: pref("group", "genre") };
   // Lien de consultation (?lecture=jeton) : lecture seule, classement par genre ou par note seulement.
   const shareToken = new URLSearchParams(location.search).get("lecture");
   const readonly = !!shareToken;
@@ -607,26 +593,14 @@ body.readonly #book-form .field { background: transparent; }
     $("#list-count").textContent = `${list.length} livre${list.length > 1 ? "s" : ""}`;
     $("#no-match").hidden = list.length > 0;
     $("#sort").value = filter.sort;
-    for (const x of $("#layout").children) x.setAttribute("aria-pressed", String(x.dataset.v === filter.layout));
-    if (filter.layout === "covers") {
-      $("#books").className = "shelf";
-      $("#books").innerHTML = list.map((b) => `
-        <button class="book" type="button" data-id="${b.id}">
-          ${coverBlock(b)}
-          <span class="title">${esc(b.title)}</span>
-          <span class="author">${esc(b.author || "")}${b.year ? " · " + b.year : ""}</span>
-          <span class="meta"><span class="stars" aria-label="${b.rating || 0} sur 5">${stars(b.rating)}</span></span>
-        </button>`).join("");
-    } else {
-      $("#books").className = "rows";
-      $("#books").innerHTML = list.map((b) => `
-        <button class="row" type="button" data-id="${b.id}">
-          ${coverBlock(b)}
-          <span><span class="title">${esc(b.title)}</span><br><span class="author">${esc(b.author || "")}</span></span>
-          <span class="yr">${b.year || ""}</span>
-          <span class="stars" aria-label="${b.rating || 0} sur 5">${stars(b.rating)}</span>
-        </button>`).join("");
-    }
+    $("#books").className = "shelf";
+    $("#books").innerHTML = list.map((b) => `
+      <button class="book" type="button" data-id="${b.id}">
+        ${coverBlock(b)}
+        <span class="title">${esc(b.title)}</span>
+        <span class="author">${esc(b.author || "")}${b.year ? " · " + b.year : ""}</span>
+        <span class="meta"><span class="stars" aria-label="${b.rating || 0} sur 5">${stars(b.rating)}</span></span>
+      </button>`).join("");
   }
 
   function renderHome() {
@@ -653,10 +627,6 @@ body.readonly #book-form .field { background: transparent; }
   $("#group").addEventListener("click", (e) => {
     const b = e.target.closest("button"); if (!b) return;
     filter.group = b.dataset.v; savePref("group", filter.group); render();
-  });
-  $("#layout").addEventListener("click", (e) => {
-    const b = e.target.closest("button"); if (!b) return;
-    filter.layout = b.dataset.v; savePref("layout", filter.layout); render();
   });
   $("#sort").addEventListener("change", (e) => { filter.sort = e.target.value; savePref("sort", filter.sort); render(); });
   $("#q").addEventListener("input", (e) => { filter.q = e.target.value; render(); });
